@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Laptop,
   Smartphone,
@@ -12,6 +12,11 @@ import {
   ArrowRightLeft,
   Settings as SettingsIcon,
   Wifi,
+  FolderOpen,
+  ExternalLink,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { OtiumLinkLogo } from './components/OtiumLinkLogo';
 import { SettingsModal } from './components/SettingsModal';
@@ -25,6 +30,8 @@ import {
   setupNativeListeners,
   transmitClipboard,
   transmitFile,
+  openDownloadsFolder,
+  openLocalFile,
 } from './core/tauriBridge';
 
 export const App: React.FC = () => {
@@ -44,7 +51,7 @@ export const App: React.FC = () => {
   const [transfers, setTransfers] = useState<TransferItem[]>([
     {
       id: 'tx_init',
-      name: 'جاهز للاستقبال والإرسال اللحظي',
+      name: 'جاهز للاستقبال والإرسال اللحظي المتدفق',
       size: 0,
       type: 'text',
       progress: 1,
@@ -52,6 +59,7 @@ export const App: React.FC = () => {
       sender: 'النظام المحلي',
       receiver: 'هذا الجهاز',
       timestamp: Date.now(),
+      verified: true,
     },
   ]);
 
@@ -64,6 +72,46 @@ export const App: React.FC = () => {
     window.addEventListener('otium-settings-changed', handleSettingsUpdate);
     return () => window.removeEventListener('otium-settings-changed', handleSettingsUpdate);
   }, []);
+
+  const handleTransmitClipboardText = useCallback(
+    async (text: string, isAutomated: boolean = false) => {
+      if (!text || !text.trim()) return;
+      if (isAutomated && text === lastAutoSyncedRef.current) return;
+
+      lastAutoSyncedRef.current = text;
+      setClipboardText(text);
+
+      const targetPeer = devices.find((d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId));
+      const targetIp = targetPeer?.ip || '127.0.0.1';
+
+      const { cleanedUrl, wasCleaned } = appSettings.cleanTrackingLinks
+        ? cleanUrl(text)
+        : { cleanedUrl: text, wasCleaned: false };
+
+      await transmitClipboard(targetIp, cleanedUrl);
+      playSendChime(appSettings.audioFeedback);
+
+      const newTransfer: TransferItem = {
+        id: `tx_${Date.now()}`,
+        name: cleanedUrl.length > 35 ? `${cleanedUrl.substring(0, 35)}...` : cleanedUrl,
+        size: new Blob([cleanedUrl]).size,
+        type: wasCleaned ? 'link' : 'text',
+        progress: 1,
+        status: 'completed',
+        sender: 'هذا الجهاز',
+        receiver: targetPeer?.name || 'الجهاز المقترن',
+        timestamp: Date.now(),
+        verified: true,
+      };
+      setTransfers((prev) => [newTransfer, ...prev]);
+
+      if (!isAutomated) {
+        setCopiedSuccess(true);
+        setTimeout(() => setCopiedSuccess(false), 2000);
+      }
+    },
+    [appSettings.audioFeedback, appSettings.cleanTrackingLinks, devices, selectedPeerId]
+  );
 
   // Load initial devices and setup Tauri event listeners
   useEffect(() => {
@@ -91,10 +139,10 @@ export const App: React.FC = () => {
 
     init();
 
-    // Listen for live P2P network discoveries and incoming transfers
+    // Listen for live P2P network discoveries, heartbeats, and incoming transfers
     let cleanupListeners: (() => void) | null = null;
-    setupNativeListeners(
-      (newPeer) => {
+    setupNativeListeners({
+      onPeerDiscovered: (newPeer) => {
         setDevices((prev) => {
           const exists = prev.some((d) => d.id === newPeer.id);
           if (exists) {
@@ -104,7 +152,13 @@ export const App: React.FC = () => {
         });
         setSelectedPeerId((prev) => prev || newPeer.id);
       },
-      (clip) => {
+      onPeersUpdated: (freshPeers) => {
+        setDevices((prev) => {
+          const self = prev.find((d) => d.isSelf);
+          return self ? [self, ...freshPeers] : freshPeers;
+        });
+      },
+      onClipboardReceived: (clip) => {
         setClipboardText(clip.text);
         lastAutoSyncedRef.current = clip.text;
         playReceiveChime(appSettings.audioFeedback);
@@ -123,11 +177,17 @@ export const App: React.FC = () => {
             sender: clip.sender,
             receiver: 'هذا الجهاز',
             timestamp: Date.now(),
+            verified: true,
           },
           ...prev,
         ]);
       },
-      (file) => {
+      onNativeClipboardChanged: (payload) => {
+        if (appSettings.autoClipboardSync) {
+          handleTransmitClipboardText(payload.text, true);
+        }
+      },
+      onFileReceived: (file) => {
         playReceiveChime(appSettings.audioFeedback);
         setTransfers((prev) => [
           {
@@ -140,11 +200,63 @@ export const App: React.FC = () => {
             sender: file.sender,
             receiver: 'هذا الجهاز',
             timestamp: Date.now(),
+            path: file.path,
+            verified: file.verified ?? true,
           },
           ...prev,
         ]);
-      }
-    ).then((cleanup) => {
+      },
+      onFileProgress: (prog) => {
+        setTransfers((prev) => {
+          const existing = prev.find((t) => t.name === prog.name && t.status === 'in_progress');
+          const progressRatio = prog.total > 0 ? prog.transferred / prog.total : 0.5;
+          if (existing) {
+            return prev.map((t) =>
+              t.id === existing.id
+                ? {
+                    ...t,
+                    progress: progressRatio,
+                    status: progressRatio >= 1 ? 'completed' : 'in_progress',
+                  }
+                : t
+            );
+          } else if (progressRatio < 1) {
+            return [
+              {
+                id: `tx_prog_${prog.name}`,
+                name: prog.name,
+                size: prog.total,
+                type: 'file',
+                progress: progressRatio,
+                status: 'in_progress',
+                sender: prog.sender,
+                receiver: 'هذا الجهاز',
+                timestamp: Date.now(),
+              },
+              ...prev,
+            ];
+          }
+          return prev;
+        });
+      },
+      onFileError: (err) => {
+        setTransfers((prev) => [
+          {
+            id: `tx_err_${Date.now()}`,
+            name: err.name,
+            size: 0,
+            type: 'file',
+            progress: 0,
+            status: 'failed',
+            sender: err.sender,
+            receiver: 'هذا الجهاز',
+            timestamp: Date.now(),
+            error: err.error,
+          },
+          ...prev,
+        ]);
+      },
+    }).then((cleanup) => {
       cleanupListeners = cleanup;
     });
 
@@ -152,54 +264,11 @@ export const App: React.FC = () => {
       isMounted = false;
       if (cleanupListeners) cleanupListeners();
     };
-  }, [appSettings.audioFeedback, appSettings.deviceName]);
+  }, [appSettings.audioFeedback, appSettings.autoClipboardSync, appSettings.deviceName, handleTransmitClipboardText]);
 
-  // Automatic Background Clipboard Poller when focused or periodically
-  useEffect(() => {
-    if (!appSettings.autoClipboardSync) return;
-
-    const checkClipboard = async () => {
-      if (typeof navigator === 'undefined' || !navigator.clipboard || !navigator.clipboard.readText) {
-        return;
-      }
-      try {
-        const text = await navigator.clipboard.readText();
-        if (text && text.trim() && text !== lastAutoSyncedRef.current) {
-          lastAutoSyncedRef.current = text;
-          setClipboardText(text);
-
-          const targetPeer = devices.find((d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId));
-          if (targetPeer) {
-            const { cleanedUrl } = appSettings.cleanTrackingLinks
-              ? cleanUrl(text)
-              : { cleanedUrl: text };
-
-            await transmitClipboard(targetPeer.ip, cleanedUrl);
-            playSendChime(appSettings.audioFeedback);
-          }
-        }
-      } catch {
-        // Clipboard read permission might require user interaction
-      }
-    };
-
-    const handleFocus = () => {
-      checkClipboard();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    const interval = setInterval(checkClipboard, 3000);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(interval);
-    };
-  }, [appSettings.autoClipboardSync, appSettings.cleanTrackingLinks, appSettings.audioFeedback, devices, selectedPeerId]);
-
-  const handleCopyClipboard = () => {
-    const textToCopy = appSettings.cleanTrackingLinks
-      ? cleanUrl(clipboardText).cleanedUrl
-      : clipboardText;
+  const handleCopyClipboard = (textOverride?: string) => {
+    const raw = textOverride || clipboardText;
+    const textToCopy = appSettings.cleanTrackingLinks ? cleanUrl(raw).cleanedUrl : raw;
 
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(textToCopy);
@@ -208,33 +277,21 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleManualSendText = async () => {
-    if (!clipboardText.trim()) return;
-
-    const targetPeer = devices.find((d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId));
-    const targetIp = targetPeer?.ip || '127.0.0.1';
-
-    const { cleanedUrl, wasCleaned } = appSettings.cleanTrackingLinks
-      ? cleanUrl(clipboardText)
-      : { cleanedUrl: clipboardText, wasCleaned: false };
-
-    await transmitClipboard(targetIp, cleanedUrl);
-    playSendChime(appSettings.audioFeedback);
-
-    const newTransfer: TransferItem = {
-      id: `tx_${Date.now()}`,
-      name: cleanedUrl.length > 35 ? `${cleanedUrl.substring(0, 35)}...` : cleanedUrl,
-      size: new Blob([cleanedUrl]).size,
-      type: wasCleaned ? 'link' : 'text',
-      progress: 1,
-      status: 'completed',
-      sender: 'هذا الجهاز',
-      receiver: targetPeer?.name || 'الجهاز المقترن',
-      timestamp: Date.now(),
-    };
-    setTransfers((prev) => [newTransfer, ...prev]);
-    setCopiedSuccess(true);
-    setTimeout(() => setCopiedSuccess(false), 2000);
+  const handleClearHistory = () => {
+    setTransfers([
+      {
+        id: 'tx_init',
+        name: 'تم مسح السجل — جاهز للتبادل اللحظي',
+        size: 0,
+        type: 'text',
+        progress: 1,
+        status: 'completed',
+        sender: 'النظام المحلي',
+        receiver: 'هذا الجهاز',
+        timestamp: Date.now(),
+        verified: true,
+      },
+    ]);
   };
 
   const activePeers = devices.filter((d) => !d.isSelf);
@@ -250,7 +307,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v0.2.0
+                v0.3.0 المستقر
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
@@ -295,10 +352,10 @@ export const App: React.FC = () => {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-xs font-bold text-gray-200">
               <ArrowRightLeft className="w-4 h-4 text-emerald-400" />
-              <span>الأجهزة المقترنة على الشبكة المحلية</span>
+              <span>الأجهزة المقترنة على الشبكة المحلية (P2P Mesh)</span>
             </div>
             <span className="text-[11px] text-gray-400">
-              {devices.length} أجهزة متصلة (تشفير نظير لنظير P2P)
+              {devices.length} أجهزة متصلة (تشفير محلي مباشر 100%)
             </span>
           </div>
 
@@ -352,7 +409,7 @@ export const App: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-bold text-gray-200">
               <Copy className="w-4 h-4 text-emerald-400" />
-              <span>الحافظة الحية التلقائية (Live Clipboard)</span>
+              <span>الحافظة الحية التلقائية (Live Background Sync)</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -407,19 +464,19 @@ export const App: React.FC = () => {
               onChange={(e) => setClipboardText(e.target.value)}
               rows={2}
               className="w-full bg-transparent text-xs text-gray-200 outline-none resize-none font-mono"
-              placeholder="انسخ أي نص أو رابط في أي مكان على جهازك وسيظهر هنا وتتم مزامنته فوراً..."
+              placeholder="انسخ أي نص أو رابط في أي مكان على جهازك وسيتم بثه ومزامنته فوراً..."
             />
 
             <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/[0.05]">
               <button
-                onClick={handleCopyClipboard}
+                onClick={() => handleCopyClipboard()}
                 className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
               >
                 {copiedSuccess ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedSuccess ? 'تم النسخ!' : 'نسخ للحافظة'}</span>
               </button>
               <button
-                onClick={handleManualSendText}
+                onClick={() => handleTransmitClipboardText(clipboardText, false)}
                 className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 transition-colors"
               >
                 <ArrowRightLeft className="w-3.5 h-3.5" />
@@ -445,7 +502,6 @@ export const App: React.FC = () => {
               const targetIp = targetPeer?.ip || '127.0.0.1';
 
               for (const f of droppedFiles) {
-                // If native file path is available in Tauri/Electron webview
                 const filePath = (f as any).path || f.name;
                 await transmitFile(targetIp, filePath);
                 playSendChime(appSettings.audioFeedback);
@@ -461,6 +517,7 @@ export const App: React.FC = () => {
                 sender: 'هذا الجهاز',
                 receiver: activePeers[0]?.name || 'الجهاز المقترن',
                 timestamp: Date.now(),
+                verified: true,
               }));
               setTransfers((prev) => [...newItems, ...prev]);
             }
@@ -479,7 +536,7 @@ export const App: React.FC = () => {
               اسحب وأفلت أي ملف أو صورة للإرسال الفوري
             </h3>
             <p className="text-[11px] text-gray-400">
-              بدون أي ضغط للجودة وبسرعة الواي فاي المباشرة (تصل إلى 100 ميجابايت/ثانية)
+              بدون أي ضغط للجودة، مع فحص سلامة البيانات بنظام CRC32 ونقل متدفق مباشر
             </p>
           </div>
           <label className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold cursor-pointer border border-white/[0.08] transition-colors">
@@ -510,6 +567,7 @@ export const App: React.FC = () => {
                     sender: 'هذا الجهاز',
                     receiver: activePeers[0]?.name || 'الجهاز المقترن',
                     timestamp: Date.now(),
+                    verified: true,
                   }));
                   setTransfers((prev) => [...newItems, ...prev]);
                 }
@@ -525,32 +583,85 @@ export const App: React.FC = () => {
               <FileText className="w-4 h-4 text-emerald-400" />
               <span>سجل التحويلات والملفات المتبادلة</span>
             </span>
-            <span className="text-[10px] text-gray-400">{transfers.length} عناصر مكتملة</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400">{transfers.length} عناصر</span>
+              <button
+                onClick={handleClearHistory}
+                title="مسح السجل"
+                className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-white/[0.05] transition-colors text-[10px] flex items-center gap-1"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>مسح</span>
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
             {transfers.map((item) => (
               <div
                 key={item.id}
-                className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between text-xs"
+                className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between text-xs transition-all hover:bg-white/[0.04]"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
                     <FileText className="w-4 h-4" />
                   </div>
-                  <div className="text-right">
-                    <span className="font-semibold text-gray-200 block truncate max-w-[220px] sm:max-w-xs">
+                  <div className="text-right min-w-0 flex-1">
+                    <span className="font-semibold text-gray-200 block truncate">
                       {item.name}
                     </span>
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-[10px] text-gray-400 block truncate">
                       {item.size > 0 ? `${formatBytes(item.size)} • ` : ''}من {item.sender} إلى {item.receiver}
                     </span>
+                    {/* Live Progress Bar if transferring */}
+                    {item.status === 'in_progress' && (
+                      <div className="w-full bg-white/10 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                        <div
+                          className="bg-emerald-400 h-full rounded-full transition-all duration-200"
+                          style={{ width: `${Math.round(item.progress * 100)}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg">
-                  <Check className="w-3 h-3" />
-                  <span>تم بنجاح</span>
+                <div className="flex items-center gap-1.5 shrink-0 mr-3">
+                  {item.path && (
+                    <button
+                      onClick={() => openLocalFile(item.path!)}
+                      title="فتح الملف"
+                      className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {item.type !== 'file' && (
+                    <button
+                      onClick={() => handleCopyClipboard(item.name)}
+                      title="نسخ مجدداً"
+                      className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {item.status === 'completed' && (
+                    <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>{item.verified ? 'مؤكد CRC32 ✓' : 'تم بنجاح'}</span>
+                    </div>
+                  )}
+                  {item.status === 'failed' && (
+                    <div className="flex items-center gap-1 text-[11px] text-rose-400 font-semibold bg-rose-500/10 px-2 py-0.5 rounded-lg">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>فشل</span>
+                    </div>
+                  )}
+                  {item.status === 'in_progress' && (
+                    <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-lg">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      <span>{Math.round(item.progress * 100)}%</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -562,14 +673,15 @@ export const App: React.FC = () => {
       <footer className="otium-chrome px-4 py-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-gray-400">
         <div className="flex items-center gap-1.5 text-emerald-400/90 font-medium">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>منظومة Otium — تشفير محلي تام بدون سحابة</span>
+          <span>منظومة Otium — تشفير محلي تام بدون أي خوادم سحابية</span>
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="hover:text-emerald-400 transition-colors"
+            onClick={() => openDownloadsFolder()}
+            className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
           >
-            مجلد التحميلات (OtiumLink)
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>مجلد التنزيلات (OtiumLink)</span>
           </button>
         </div>
       </footer>

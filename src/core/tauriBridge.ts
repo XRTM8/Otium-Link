@@ -78,6 +78,30 @@ export async function updateDownloadDir(path: string): Promise<boolean> {
   }
 }
 
+export async function openDownloadsFolder(): Promise<boolean> {
+  if (!isTauriEnvironment()) return false;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('open_downloads_folder');
+    return true;
+  } catch (err) {
+    console.warn('Failed to open downloads folder:', err);
+    return false;
+  }
+}
+
+export async function openLocalFile(filePath: string): Promise<boolean> {
+  if (!isTauriEnvironment()) return false;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('open_file', { filePath });
+    return true;
+  } catch (err) {
+    console.warn('Failed to open file:', err);
+    return false;
+  }
+}
+
 export async function fetchDiscoveredPeers(): Promise<Device[]> {
   if (!isTauriEnvironment()) {
     return [];
@@ -139,17 +163,24 @@ export async function transmitFile(targetIp: string, filePath: string): Promise<
   }
 }
 
-export async function setupNativeListeners(
-  onPeerDiscovered: (device: Device) => void,
-  onClipboardReceived: (payload: { text: string; sender: string; timestamp: number }) => void,
-  onFileReceived: (payload: { name: string; path: string; size: number; sender: string }) => void
-): Promise<() => void> {
+export interface NativeListenersConfig {
+  onPeerDiscovered: (device: Device) => void;
+  onPeersUpdated?: (devices: Device[]) => void;
+  onClipboardReceived: (payload: { text: string; sender: string; timestamp: number }) => void;
+  onNativeClipboardChanged?: (payload: { text: string; sender: string }) => void;
+  onFileReceived: (payload: { name: string; path: string; size: number; sender: string; verified?: boolean }) => void;
+  onFileProgress?: (payload: { name: string; transferred: number; total: number; sender: string }) => void;
+  onFileError?: (payload: { name: string; sender: string; error: string }) => void;
+}
+
+export async function setupNativeListeners(config: NativeListenersConfig): Promise<() => void> {
   if (!isTauriEnvironment()) {
     return () => {};
   }
 
   try {
     const { listen } = await import('@tauri-apps/api/event');
+    const unlisteners: Array<() => void> = [];
 
     const unlistenPeer = await listen<{
       id: string;
@@ -160,7 +191,7 @@ export async function setupNativeListeners(
       last_seen: number;
     }>('otium-link://peer-discovered', (event) => {
       const p = event.payload;
-      onPeerDiscovered({
+      config.onPeerDiscovered({
         id: p.id,
         name: p.name,
         os: p.os as Device['os'],
@@ -171,25 +202,80 @@ export async function setupNativeListeners(
         isSelf: false,
       });
     });
+    unlisteners.push(unlistenPeer);
+
+    if (config.onPeersUpdated) {
+      const unlistenUpdated = await listen<Array<{
+        id: string;
+        name: string;
+        os: string;
+        ip: string;
+        port: number;
+        last_seen: number;
+      }>>('otium-link://peers-updated', (event) => {
+        const peers = event.payload.map((p) => ({
+          id: p.id,
+          name: p.name,
+          os: p.os as Device['os'],
+          ip: p.ip,
+          port: p.port,
+          lastSeen: p.last_seen,
+          status: 'paired' as const,
+          isSelf: false,
+        }));
+        config.onPeersUpdated!(peers);
+      });
+      unlisteners.push(unlistenUpdated);
+    }
 
     const unlistenClip = await listen<{ text: string; sender: string; timestamp: number }>(
       'otium-link://clipboard-received',
       (event) => {
-        onClipboardReceived(event.payload);
+        config.onClipboardReceived(event.payload);
       }
     );
+    unlisteners.push(unlistenClip);
 
-    const unlistenFile = await listen<{ name: string; path: string; size: number; sender: string }>(
+    if (config.onNativeClipboardChanged) {
+      const unlistenNativeClip = await listen<{ text: string; sender: string }>(
+        'otium-link://native-clipboard-changed',
+        (event) => {
+          config.onNativeClipboardChanged!(event.payload);
+        }
+      );
+      unlisteners.push(unlistenNativeClip);
+    }
+
+    const unlistenFile = await listen<{ name: string; path: string; size: number; sender: string; verified?: boolean }>(
       'otium-link://file-received',
       (event) => {
-        onFileReceived(event.payload);
+        config.onFileReceived(event.payload);
       }
     );
+    unlisteners.push(unlistenFile);
+
+    if (config.onFileProgress) {
+      const unlistenProgress = await listen<{ name: string; transferred: number; total: number; sender: string }>(
+        'otium-link://file-progress',
+        (event) => {
+          config.onFileProgress!(event.payload);
+        }
+      );
+      unlisteners.push(unlistenProgress);
+    }
+
+    if (config.onFileError) {
+      const unlistenErr = await listen<{ name: string; sender: string; error: string }>(
+        'otium-link://file-error',
+        (event) => {
+          config.onFileError!(event.payload);
+        }
+      );
+      unlisteners.push(unlistenErr);
+    }
 
     return () => {
-      unlistenPeer();
-      unlistenClip();
-      unlistenFile();
+      unlisteners.forEach((fn) => fn());
     };
   } catch {
     return () => {};

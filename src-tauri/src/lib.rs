@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
@@ -11,7 +11,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::WindowEvent;
 
 mod network;
-use network::{NetworkManager, PeerDevice};
+pub use network::{get_unique_filepath, NetworkManager, PeerDevice};
 
 struct AppState {
     network: Arc<NetworkManager>,
@@ -40,9 +40,33 @@ fn send_clipboard(state: tauri::State<'_, AppState>, target_ip: String, text: St
 }
 
 #[tauri::command]
-fn send_file(state: tauri::State<'_, AppState>, target_ip: String, file_path: String) -> Result<(), String> {
+fn send_file(app: tauri::AppHandle, state: tauri::State<'_, AppState>, target_ip: String, file_path: String) -> Result<(), String> {
     let sender = state.network.self_device.lock().unwrap().name.clone();
-    state.network.send_file(&target_ip, PathBuf::from(file_path), sender)
+    let app_handle = app.clone();
+    let safe_name = PathBuf::from(&file_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "file.bin".to_string());
+
+    let file_label = safe_name.clone();
+    let peer_target = target_ip.clone();
+
+    state.network.send_file(
+        &peer_target,
+        PathBuf::from(file_path),
+        sender.clone(),
+        move |transferred, total| {
+            let _ = app_handle.emit(
+                "otium-link://file-progress",
+                serde_json::json!({
+                    "name": file_label,
+                    "transferred": transferred,
+                    "total": total,
+                    "sender": sender
+                }),
+            );
+        },
+    )
 }
 
 #[tauri::command]
@@ -57,6 +81,50 @@ fn set_download_dir(state: tauri::State<'_, AppState>, path: String) -> Result<(
         std::fs::create_dir_all(&p).map_err(|e| e.to_string())?;
     }
     state.network.set_downloads_dir(p);
+    Ok(())
+}
+
+#[tauri::command]
+fn open_downloads_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let dir = state.network.get_downloads_dir();
+    let _ = std::fs::create_dir_all(&dir);
+
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(&dir).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(&dir).spawn();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_file(file_path: String) -> Result<(), String> {
+    let path = PathBuf::from(&file_path);
+    if !path.exists() {
+        return Err("File does not exist on disk".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path.to_string_lossy()])
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(&path).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(&path).spawn();
+    }
     Ok(())
 }
 
@@ -84,6 +152,11 @@ pub fn run() {
             let network = Arc::new(NetworkManager::new(device_name, downloads_dir));
             network.start_discovery(handle.clone());
             network.start_tcp_server(handle.clone());
+
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            {
+                network.start_desktop_clipboard_watcher(handle.clone());
+            }
 
             app.manage(AppState { network });
 
@@ -154,7 +227,9 @@ pub fn run() {
             send_clipboard,
             send_file,
             get_download_dir,
-            set_download_dir
+            set_download_dir,
+            open_downloads_folder,
+            open_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running otium link");

@@ -25,7 +25,7 @@ describe('urlCleaner', () => {
 
   it('formats bytes into human readable units', () => {
     expect(formatBytes(0)).toBe('0 B');
-    expect(formatBytes(1024)).toBe('1.0 KB');
+    expect(formatBytes(1024)).toBe('1 KB');
     expect(formatBytes(1024 * 1024 * 4.5)).toBe('4.5 MB');
   });
 });

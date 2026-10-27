@@ -25,6 +25,8 @@ export interface TransferItem {
   sender: string;
   receiver: string;
   timestamp: number;
+  path?: string;
+  verified?: boolean;
   previewUrl?: string;
   error?: string;
 }
