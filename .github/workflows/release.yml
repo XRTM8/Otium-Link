@@ -147,12 +147,9 @@ jobs:
           mkdir -p "$keystore_dir"
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_dir/release.jks"
-            cat > "$keystore_dir/keystore.properties" <<EOF
-storeFile=release.jks
-storePassword=$ANDROID_KEYSTORE_PASSWORD
-keyAlias=$ANDROID_KEY_ALIAS
-keyPassword=$ANDROID_KEY_PASSWORD
-EOF
+            printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" \
+              > "$keystore_dir/keystore.properties"
           else
             echo "ERROR: Missing ANDROID_KEYSTORE_BASE64 secret. Release APK must be signed."
             exit 1
@@ -239,32 +236,21 @@ EOF
           sha256sum * > SHA256SUMS.txt
           cd ..
 
-      - name: Create release notes
-        shell: bash
-        env:
-          VERSION: ${{ needs.verify.outputs.version }}
-          TAG: ${{ needs.verify.outputs.tag }}
-        run: |
-          cat > release-notes.md << 'EOF'
-          # Otium Link v${{ needs.verify.outputs.version }} ⚡📱💻
-
-          Official production release of Otium Link — The sovereign, local-first universal bridge between desktop and mobile.
-
-          ### Overhaul Highlights (v1.6.0)
-          - **Signed & Verified Android Distributables:** Fully signed with official Otium keystore (v1, v2, v3 schemes) ensuring seamless installation on all Android devices with zero parse/security errors.
-          - **Universal & Split APK Distribution:** Provides both optimized per-ABI APKs (`arm64-v8a`, `armeabi-v7a`, `x86_64`) and a guaranteed `universal.apk` for all devices.
-          - **Native Destination Exploration:** Instant "Show in Folder" (`FolderOpen`) action on transfer cards to reveal received files directly in Windows Explorer.
-          - **Direct Pairing & Self-IP Hub:** Dedicated connection card displaying local IP and port for frictionless manual connect across AP-isolated networks.
-          - **Strict Offline Sovereignty:** Zero cloud telemetry, zero proxy servers, pure P2P LAN encryption and streaming.
-          - **GPL-3.0 Licensed:** Free open-source software forever.
-          EOF
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.verify.outputs.tag }}
           name: Otium Link v${{ needs.verify.outputs.version }}
-          body_path: release-notes.md
+          body: |
+            Official production release of Otium Link — The sovereign, local-first universal bridge between desktop and mobile.
+
+            ### Overhaul Highlights (v1.6.0)
+            - **Signed & Verified Android Distributables:** Fully signed with official Otium keystore (v1, v2, v3 schemes) ensuring seamless installation on all Android devices with zero parse/security errors.
+            - **Universal & Split APK Distribution:** Provides both optimized per-ABI APKs (`arm64-v8a`, `armeabi-v7a`, `x86_64`) and a guaranteed `universal.apk` for all devices.
+            - **Native Destination Exploration:** Instant "Show in Folder" (`FolderOpen`) action on transfer cards to reveal received files directly in Windows Explorer.
+            - **Direct Pairing & Self-IP Hub:** Dedicated connection card displaying local IP and port for frictionless manual connect across AP-isolated networks.
+            - **Strict Offline Sovereignty:** Zero cloud telemetry, zero proxy servers, pure P2P LAN encryption and streaming.
+            - **GPL-3.0 Licensed:** Free open-source software forever.
           files: release/*
           draft: false
           prerelease: false
