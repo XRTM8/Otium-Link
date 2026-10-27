@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Laptop,
   Smartphone,
@@ -14,36 +14,22 @@ import {
 import { OtiumLinkLogo } from './components/OtiumLinkLogo';
 import { Device, TransferItem, LinkSettings } from './core/types';
 import { cleanUrl, formatBytes } from './core/urlCleaner';
+import {
+  fetchDiscoveredPeers,
+  fetchSelfDevice,
+  setupNativeListeners,
+  transmitClipboard,
+} from './core/tauriBridge';
 
 export const App: React.FC = () => {
-  // Device state
-  const [devices] = useState<Device[]>([
-    {
-      id: 'dev_pc_1',
-      name: 'حاسوب الويندوز (هذا الجهاز)',
-      os: 'windows',
-      ip: '192.168.1.105',
-      port: 42424,
-      lastSeen: Date.now(),
-      status: 'paired',
-      isSelf: true,
-    },
-    {
-      id: 'dev_phone_1',
-      name: 'هاتف Galaxy Ultra',
-      os: 'android',
-      ip: '192.168.1.112',
-      port: 42424,
-      lastSeen: Date.now(),
-      status: 'paired',
-    },
-  ]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<LinkSettings>({
     autoSyncClipboard: true,
     stripTrackingTokens: true,
     notifyOnReceived: true,
-    deviceName: 'حاسوب الويندوز',
+    deviceName: 'هذا الجهاز',
   });
 
   const [clipboardText, setClipboardText] = useState(
@@ -52,31 +38,100 @@ export const App: React.FC = () => {
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Recent Transfer history
+  // Transfer history
   const [transfers, setTransfers] = useState<TransferItem[]>([
     {
-      id: 'tx_1',
-      name: 'كتاب_الذكاء_الاصطناعي_الفلسفي.pdf',
-      size: 14.8 * 1024 * 1024,
-      type: 'file',
+      id: 'tx_init',
+      name: 'جاهز للاستقبال والإرسال اللحظي',
+      size: 0,
+      type: 'text',
       progress: 1,
       status: 'completed',
-      sender: 'Galaxy Ultra',
+      sender: 'النظام المحلي',
       receiver: 'هذا الجهاز',
-      timestamp: Date.now() - 1000 * 60 * 4,
-    },
-    {
-      id: 'tx_2',
-      name: 'وثائق_المسح_الضوئي_OtiumScan.pdf',
-      size: 4.2 * 1024 * 1024,
-      type: 'file',
-      progress: 1,
-      status: 'completed',
-      sender: 'Galaxy Ultra',
-      receiver: 'هذا الجهاز',
-      timestamp: Date.now() - 1000 * 60 * 18,
+      timestamp: Date.now(),
     },
   ]);
+
+  // Load initial devices and setup Tauri event listeners
+  useEffect(() => {
+    let isMounted = true;
+
+    async function init() {
+      const self = await fetchSelfDevice();
+      const peers = await fetchDiscoveredPeers();
+      if (!isMounted) return;
+
+      const initialDevices: Device[] = [];
+      if (self) initialDevices.push(self);
+      initialDevices.push(...peers);
+      setDevices(initialDevices);
+
+      if (peers.length > 0) {
+        setSelectedPeerId(peers[0].id);
+      }
+    }
+
+    init();
+
+    // Listen for live P2P network discoveries and incoming transfers
+    let cleanupListeners: (() => void) | null = null;
+    setupNativeListeners(
+      (newPeer) => {
+        setDevices((prev) => {
+          const exists = prev.some((d) => d.id === newPeer.id);
+          if (exists) {
+            return prev.map((d) => (d.id === newPeer.id ? newPeer : d));
+          }
+          return [...prev, newPeer];
+        });
+        setSelectedPeerId((prev) => prev || newPeer.id);
+      },
+      (clip) => {
+        setClipboardText(clip.text);
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(clip.text).catch(() => {});
+        }
+        setTransfers((prev) => [
+          {
+            id: `tx_${Date.now()}`,
+            name: clip.text.length > 40 ? `${clip.text.substring(0, 40)}...` : clip.text,
+            size: new Blob([clip.text]).size,
+            type: 'text',
+            progress: 1,
+            status: 'completed',
+            sender: clip.sender,
+            receiver: 'هذا الجهاز',
+            timestamp: Date.now(),
+          },
+          ...prev,
+        ]);
+      },
+      (file) => {
+        setTransfers((prev) => [
+          {
+            id: `tx_${Date.now()}`,
+            name: file.name,
+            size: file.size,
+            type: 'file',
+            progress: 1,
+            status: 'completed',
+            sender: file.sender,
+            receiver: 'هذا الجهاز',
+            timestamp: Date.now(),
+          },
+          ...prev,
+        ]);
+      }
+    ).then((cleanup) => {
+      cleanupListeners = cleanup;
+    });
+
+    return () => {
+      isMounted = false;
+      if (cleanupListeners) cleanupListeners();
+    };
+  }, []);
 
   const handleCopyClipboard = () => {
     const textToCopy = settings.stripTrackingTokens
@@ -90,11 +145,17 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleManualSendText = () => {
+  const handleManualSendText = async () => {
     if (!clipboardText.trim()) return;
+
+    const targetPeer = devices.find((d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId));
+    const targetIp = targetPeer?.ip || '127.0.0.1';
+
     const { cleanedUrl, wasCleaned } = settings.stripTrackingTokens
       ? cleanUrl(clipboardText)
       : { cleanedUrl: clipboardText, wasCleaned: false };
+
+    await transmitClipboard(targetIp, cleanedUrl);
 
     const newTransfer: TransferItem = {
       id: `tx_${Date.now()}`,
@@ -104,13 +165,15 @@ export const App: React.FC = () => {
       progress: 1,
       status: 'completed',
       sender: 'هذا الجهاز',
-      receiver: 'Galaxy Ultra',
+      receiver: targetPeer?.name || 'الجهاز المقترن',
       timestamp: Date.now(),
     };
-    setTransfers([newTransfer, ...transfers]);
+    setTransfers((prev) => [newTransfer, ...prev]);
     setCopiedSuccess(true);
     setTimeout(() => setCopiedSuccess(false), 2000);
   };
+
+  const activePeers = devices.filter((d) => !d.isSelf);
 
   return (
     <div className="flex flex-col h-screen w-full bg-[#07090e] text-[#f0f6fc] select-none overflow-hidden font-sans">
@@ -136,6 +199,13 @@ export const App: React.FC = () => {
             <span className="text-gray-300 font-medium">الواي فاي المحلي جاهز</span>
           </div>
           <button
+            onClick={async () => {
+              const peers = await fetchDiscoveredPeers();
+              setDevices((prev) => {
+                const self = prev.find((d) => d.isSelf);
+                return self ? [self, ...peers] : peers;
+              });
+            }}
             title="تحديث الأجهزة المتصلة"
             className="p-1.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.08] transition-colors"
           >
@@ -153,40 +223,54 @@ export const App: React.FC = () => {
               <ArrowRightLeft className="w-4 h-4 text-emerald-400" />
               <span>الأجهزة المقترنة على الشبكة</span>
             </div>
-            <span className="text-[11px] text-gray-400">2 أجهزة متصلة ومشفرة</span>
+            <span className="text-[11px] text-gray-400">
+              {devices.length} أجهزة متصلة ومشفرة
+            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {devices.map((device) => (
-              <div
-                key={device.id}
-                className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
-                  device.isSelf
-                    ? 'bg-white/[0.03] border-white/[0.08]'
-                    : 'bg-emerald-500/[0.04] border-emerald-500/20 hover:border-emerald-500/40'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`p-2.5 rounded-xl ${
-                      device.os === 'windows' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-emerald-500/10 text-emerald-400'
-                    }`}
-                  >
-                    {device.os === 'windows' ? <Laptop className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
+            {devices.map((device) => {
+              const isSelected = !device.isSelf && device.id === selectedPeerId;
+              return (
+                <div
+                  key={device.id}
+                  onClick={() => !device.isSelf && setSelectedPeerId(device.id)}
+                  className={`p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+                    device.isSelf
+                      ? 'bg-white/[0.03] border-white/[0.08] cursor-default'
+                      : isSelected
+                      ? 'bg-emerald-500/10 border-emerald-500/50 shadow-lg shadow-emerald-500/5'
+                      : 'bg-emerald-500/[0.04] border-emerald-500/20 hover:border-emerald-500/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`p-2.5 rounded-xl ${
+                        device.os === 'windows' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-emerald-500/10 text-emerald-400'
+                      }`}
+                    >
+                      {device.os === 'windows' ? <Laptop className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-white block">{device.name}</span>
+                      <span className="text-[10px] text-gray-400 font-mono">{device.ip}</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs font-bold text-white block">{device.name}</span>
-                    <span className="text-[10px] text-gray-400 font-mono">{device.ip}</span>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span>{device.isSelf ? 'جهازك الحالي' : 'متصل'}</span>
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span>{device.isSelf ? 'جهازك الحالي' : isSelected ? 'المستهدف ✓' : 'متصل'}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {activePeers.length === 0 && (
+            <div className="mt-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-xs text-gray-400">
+              جارٍ الاستكشاف التلقائي عبر الشبكة المحلية (mDNS)... شغّل Otium Link على الهاتف أو جهازك الآخر للربط التلقائي.
+            </div>
+          )}
         </section>
 
         {/* Live Universal Clipboard Section */}
@@ -267,7 +351,7 @@ export const App: React.FC = () => {
                 className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 transition-colors"
               >
                 <ArrowRightLeft className="w-3.5 h-3.5" />
-                <span>إرسال للهاتف فوراً</span>
+                <span>إرسال للجهاز المقترن فوراً</span>
               </button>
             </div>
           </div>
@@ -293,7 +377,7 @@ export const App: React.FC = () => {
                 progress: 1,
                 status: 'completed',
                 sender: 'هذا الجهاز',
-                receiver: 'Galaxy Ultra',
+                receiver: activePeers[0]?.name || 'الجهاز المقترن',
                 timestamp: Date.now(),
               }));
               setTransfers((prev) => [...newItems, ...prev]);
@@ -333,7 +417,7 @@ export const App: React.FC = () => {
                     progress: 1,
                     status: 'completed',
                     sender: 'هذا الجهاز',
-                    receiver: 'Galaxy Ultra',
+                    receiver: activePeers[0]?.name || 'الجهاز المقترن',
                     timestamp: Date.now(),
                   }));
                   setTransfers((prev) => [...newItems, ...prev]);
@@ -368,7 +452,7 @@ export const App: React.FC = () => {
                       {item.name}
                     </span>
                     <span className="text-[10px] text-gray-400">
-                      {formatBytes(item.size)} • من {item.sender} إلى {item.receiver}
+                      {item.size > 0 ? `${formatBytes(item.size)} • ` : ''}من {item.sender} إلى {item.receiver}
                     </span>
                   </div>
                 </div>
@@ -390,9 +474,7 @@ export const App: React.FC = () => {
           <span>منظومة Otium — تشفير محلي تام بدون سحابة</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hover:text-gray-200 cursor-pointer">مجلد التحميلات</span>
-          <span>•</span>
-          <span className="hover:text-gray-200 cursor-pointer">الإعدادات</span>
+          <span className="hover:text-gray-200 cursor-pointer">مجلد التحميلات (OtiumLink)</span>
         </div>
       </footer>
     </div>
