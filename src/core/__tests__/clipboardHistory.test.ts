@@ -71,4 +71,11 @@ describe('Clipboard History Vault', () => {
     clearClipboardHistory();
     expect(loadClipboardHistory().length).toBe(0);
   });
+
+  it('truncates excessively long text to protect localStorage quota', () => {
+    const hugeText = 'A'.repeat(30_000);
+    const items = addClipboardHistoryItem(hugeText);
+    expect(items[0].text.length).toBeLessThan(30_000);
+    expect(items[0].text).toContain('[مقتطع للحفظ المحلي]');
+  });
 });

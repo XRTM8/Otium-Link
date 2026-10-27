@@ -15,6 +15,7 @@ export interface HistoryItem {
 
 const STORAGE_KEY = 'otium_link_clip_history_v1';
 const MAX_HISTORY_ITEMS = 30;
+export const MAX_ITEM_TEXT_LENGTH = 20_000;
 
 export function detectContentType(text: string): ClipboardContentType {
   const trimmed = text.trim();
@@ -56,20 +57,26 @@ export function addClipboardHistoryItem(text: string, isCleanedUrl?: boolean): H
   if (!text || !text.trim()) return loadClipboardHistory();
   const current = loadClipboardHistory();
 
+  const rawTrimmed = text.trim();
+  const safeText =
+    rawTrimmed.length > MAX_ITEM_TEXT_LENGTH
+      ? rawTrimmed.substring(0, MAX_ITEM_TEXT_LENGTH) + '\n... [مقتطع للحفظ المحلي]'
+      : rawTrimmed;
+
   // Skip if same as the most recent item
-  if (current.length > 0 && current[0].text === text.trim()) {
+  if (current.length > 0 && current[0].text === safeText) {
     return current;
   }
 
   const newItem: HistoryItem = {
     id: `clip_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    text: text.trim(),
-    type: detectContentType(text),
+    text: safeText,
+    type: detectContentType(safeText),
     timestamp: Date.now(),
     isCleanedUrl,
   };
 
-  const updated = [newItem, ...current.filter((item) => item.text !== text.trim())].slice(
+  const updated = [newItem, ...current.filter((item) => item.text !== safeText)].slice(
     0,
     MAX_HISTORY_ITEMS
   );

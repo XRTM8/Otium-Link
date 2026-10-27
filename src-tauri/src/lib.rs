@@ -105,25 +105,57 @@ fn open_downloads_folder(state: tauri::State<'_, AppState>) -> Result<(), String
 }
 
 #[tauri::command]
-fn open_file(file_path: String) -> Result<(), String> {
+fn open_file(state: tauri::State<'_, AppState>, file_path: String) -> Result<(), String> {
     let path = PathBuf::from(&file_path);
     if !path.exists() {
         return Err("File does not exist on disk".to_string());
     }
 
+    // Verify file is within designated downloads directory
+    let downloads_dir = state.network.get_downloads_dir();
+    let canonical_target = path.canonicalize().map_err(|e| e.to_string())?;
+    let canonical_downloads = downloads_dir.canonicalize().map_err(|e| e.to_string())?;
+
+    if !canonical_target.starts_with(&canonical_downloads) {
+        return Err("Access denied: File is outside the downloads directory".to_string());
+    }
+
+    // Guard against executing dangerous scripts/binaries
+    #[cfg(target_os = "windows")]
+    let is_dangerous_executable = canonical_target
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|ext| {
+            let lower = ext.to_lowercase();
+            matches!(
+                lower.as_str(),
+                "exe" | "bat" | "cmd" | "vbs" | "vbe" | "js" | "jse" | "wsf" | "wsh" | "msc"
+                    | "scr" | "ps1" | "ps2" | "pif" | "com" | "reg" | "msi" | "hta"
+            )
+        })
+        .unwrap_or(false);
+
     #[cfg(target_os = "windows")]
     {
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", "start", "", &path.to_string_lossy()])
-            .spawn();
+        if is_dangerous_executable {
+            // For dangerous executable files, DO NOT execute directly! Reveal safely in Explorer
+            let _ = std::process::Command::new("explorer")
+                .arg(format!("/select,\"{}\"", canonical_target.to_string_lossy()))
+                .spawn();
+        } else {
+            // Launch safe file viewer via explorer directly without cmd.exe
+            let _ = std::process::Command::new("explorer")
+                .arg(&canonical_target)
+                .spawn();
+        }
     }
     #[cfg(target_os = "macos")]
     {
-        let _ = std::process::Command::new("open").arg(&path).spawn();
+        let _ = std::process::Command::new("open").arg(&canonical_target).spawn();
     }
     #[cfg(target_os = "linux")]
     {
-        let _ = std::process::Command::new("xdg-open").arg(&path).spawn();
+        let _ = std::process::Command::new("xdg-open").arg(&canonical_target).spawn();
     }
     Ok(())
 }

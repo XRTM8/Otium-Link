@@ -37,8 +37,11 @@ describe('Smart URL Cleaner & Privacy Shield', () => {
     expect(cleanedUrl).toBe(legitimate);
   });
 
-  it('formats bytes into clean human readable units', () => {
+  it('formats bytes into clean human readable units and handles edge cases safely', () => {
     expect(formatBytes(0)).toBe('0 B');
+    expect(formatBytes(-100)).toBe('0 B');
+    expect(formatBytes(NaN)).toBe('0 B');
+    expect(formatBytes(Infinity)).toBe('0 B');
     expect(formatBytes(1024)).toBe('1 KB');
     expect(formatBytes(1024 * 1024 * 4.5)).toBe('4.5 MB');
   });

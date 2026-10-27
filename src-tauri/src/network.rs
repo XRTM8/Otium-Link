@@ -51,6 +51,48 @@ pub struct FileHeaderPayload {
     pub crc32: Option<u32>,
 }
 
+pub fn sanitize_filename(raw: &str) -> String {
+    let file_name = Path::new(raw)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    // Replace invalid/control characters with underscore
+    let sanitized: String = file_name
+        .chars()
+        .map(|c| {
+            if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '\0') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+
+    let trimmed = sanitized.trim().trim_matches('.').to_string();
+    if trimmed.is_empty() {
+        return "downloaded_file.bin".to_string();
+    }
+
+    // Windows reserved device names: CON, PRN, AUX, NUL, COM1-9, LPT1-9
+    let stem = Path::new(&trimmed)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_uppercase();
+
+    const RESERVED_NAMES: &[&str] = &[
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+        "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+
+    if RESERVED_NAMES.contains(&stem.as_str()) {
+        format!("otium_{}", trimmed)
+    } else {
+        trimmed
+    }
+}
+
 pub fn get_unique_filepath(target_dir: &Path, safe_name: &str) -> PathBuf {
     let target_path = target_dir.join(safe_name);
     if !target_path.exists() {
@@ -211,9 +253,10 @@ impl NetworkManager {
                             .as_secs();
 
                         let peer_ip = src_addr.ip().to_string();
+                        let safe_name: String = beacon.name.chars().take(48).collect();
                         let peer = PeerDevice {
                             id: beacon.id.clone(),
-                            name: beacon.name,
+                            name: safe_name,
                             os: beacon.os,
                             ip: peer_ip,
                             port: beacon.port,
@@ -222,10 +265,11 @@ impl NetworkManager {
                         };
 
                         let mut table = listener_peers.lock().unwrap();
-                        table.insert(beacon.id, peer.clone());
-
-                        // Notify frontend of discovered or refreshed peer
-                        let _ = listener_app.emit("otium-link://peer-discovered", peer);
+                        if table.len() < 64 || table.contains_key(&beacon.id) {
+                            table.insert(beacon.id, peer.clone());
+                            // Notify frontend of discovered or refreshed peer
+                            let _ = listener_app.emit("otium-link://peer-discovered", peer);
+                        }
                     }
                 }
             }
@@ -299,6 +343,13 @@ impl NetworkManager {
             let _ = fs::create_dir_all(&*dir);
         }
 
+        const MAX_CONCURRENT_TCP_CONNECTIONS: usize = 16;
+        const MAX_CLIPBOARD_PAYLOAD: usize = 10 * 1024 * 1024; // 10MB
+        const MAX_FILE_HEADER_PAYLOAD: usize = 64 * 1024;      // 64KB
+        const MAX_FILE_TRANSFER_SIZE: u64 = 100 * 1024 * 1024 * 1024; // 100GB
+
+        let active_connections = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
         thread::spawn(move || {
             let listener = match TcpListener::bind(format!("0.0.0.0:{}", TCP_PORT)) {
                 Ok(l) => l,
@@ -310,10 +361,29 @@ impl NetworkManager {
 
             for stream in listener.incoming() {
                 if let Ok(mut stream) = stream {
+                    let current = active_connections.load(std::sync::atomic::Ordering::Relaxed);
+                    if current >= MAX_CONCURRENT_TCP_CONNECTIONS {
+                        // Drop connection to prevent thread exhaustion DoS
+                        continue;
+                    }
+
+                    active_connections.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let active_conn_clone = active_connections.clone();
                     let app_clone = app.clone();
                     let downloads_clone = downloads.clone();
 
                     thread::spawn(move || {
+                        struct ConnGuard(Arc<std::sync::atomic::AtomicUsize>);
+                        impl Drop for ConnGuard {
+                            fn drop(&mut self) {
+                                self.0.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                            }
+                        }
+                        let _guard = ConnGuard(active_conn_clone);
+
+                        let _ = stream.set_read_timeout(Some(Duration::from_secs(15)));
+                        let _ = stream.set_write_timeout(Some(Duration::from_secs(15)));
+
                         let mut magic = [0u8; 4];
                         if stream.read_exact(&mut magic).is_err() || &magic != PROTOCOL_MAGIC {
                             return;
@@ -332,7 +402,10 @@ impl NetworkManager {
 
                         match msg_type[0] {
                             1 => {
-                                // 1 = Clipboard Sync
+                                // 1 = Clipboard Sync (capped to 10MB to prevent OOM panic)
+                                if payload_len > MAX_CLIPBOARD_PAYLOAD {
+                                    return;
+                                }
                                 let mut payload = vec![0u8; payload_len];
                                 if stream.read_exact(&mut payload).is_ok() {
                                     if let Ok(clip) = serde_json::from_slice::<ClipboardPayload>(&payload) {
@@ -342,13 +415,17 @@ impl NetworkManager {
                             }
                             2 => {
                                 // 2 = Streamed File Transfer with CRC32 verification & atomic write
+                                if payload_len > MAX_FILE_HEADER_PAYLOAD {
+                                    return;
+                                }
                                 let mut header_bytes = vec![0u8; payload_len];
                                 if stream.read_exact(&mut header_bytes).is_ok() {
                                     if let Ok(header) = serde_json::from_slice::<FileHeaderPayload>(&header_bytes) {
-                                        let safe_name = PathBuf::from(&header.file_name)
-                                            .file_name()
-                                            .map(|n| n.to_string_lossy().to_string())
-                                            .unwrap_or_else(|| "downloaded_file.bin".to_string());
+                                        if header.file_size > MAX_FILE_TRANSFER_SIZE {
+                                            return;
+                                        }
+
+                                        let safe_name = sanitize_filename(&header.file_name);
 
                                         let target_dir = downloads_clone
                                             .lock()
@@ -428,11 +505,11 @@ impl NetworkManager {
                                                     let _ = app_clone.emit(
                                                         "otium-link://file-received",
                                                         serde_json::json!({
-                                                            "name": final_name,
-                                                            "path": unique_target.to_string_lossy(),
-                                                            "size": received_bytes,
-                                                            "sender": header.sender,
-                                                            "verified": true
+                                                             "name": final_name,
+                                                             "path": unique_target.to_string_lossy(),
+                                                             "size": received_bytes,
+                                                             "sender": header.sender,
+                                                             "verified": true
                                                         }),
                                                     );
                                                 } else {
@@ -467,6 +544,8 @@ impl NetworkManager {
             &format!("{}:{}", target_ip, TCP_PORT).parse().map_err(|e| format!("{:?}", e))?,
             Duration::from_secs(3),
         ).map_err(|e| format!("Connection failed: {}", e))?;
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -508,6 +587,8 @@ impl NetworkManager {
             &format!("{}:{}", target_ip, TCP_PORT).parse().map_err(|e| format!("{:?}", e))?,
             Duration::from_secs(5),
         ).map_err(|e| format!("Connection failed: {}", e))?;
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(15)));
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(15)));
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -596,5 +677,17 @@ mod tests {
         let mut hasher2 = crc32fast::Hasher::new();
         hasher2.update(data);
         assert_eq!(crc, hasher2.finalize());
+    }
+
+    #[test]
+    fn test_sanitize_filename_traversal_and_reserved() {
+        assert_eq!(sanitize_filename("../../etc/passwd"), "passwd");
+        assert_eq!(sanitize_filename("C:\\Windows\\System32\\cmd.exe"), "cmd.exe");
+        assert_eq!(sanitize_filename("CON.txt"), "otium_CON.txt");
+        assert_eq!(sanitize_filename("aux.pdf"), "otium_aux.pdf");
+        assert_eq!(sanitize_filename("nul"), "otium_nul");
+        assert_eq!(sanitize_filename("hello:world*test?.pdf"), "hello_world_test_.pdf");
+        assert_eq!(sanitize_filename("..."), "downloaded_file.bin");
+        assert_eq!(sanitize_filename(""), "downloaded_file.bin");
     }
 }

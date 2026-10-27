@@ -84,6 +84,7 @@ export const App: React.FC = () => {
   const [clipboardFilter, setClipboardFilter] = useState<'all' | ClipboardContentType>('all');
   const [clipboardSearch, setClipboardSearch] = useState('');
   const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
+  const [peerNotice, setPeerNotice] = useState<string | null>(null);
 
   // Transfer history
   const [transfers, setTransfers] = useState<TransferItem[]>([
@@ -124,18 +125,26 @@ export const App: React.FC = () => {
 
   const handleTransmitClipboardText = useCallback(
     async (text: string, isAutomated: boolean = false) => {
-      if (!text || !text.trim()) return;
-      if (isAutomated && text === lastAutoSyncedRef.current) return;
+      const trimmed = text ? text.trim() : '';
+      if (!trimmed) return;
+      if (isAutomated && trimmed === lastAutoSyncedRef.current) return;
 
-      lastAutoSyncedRef.current = text;
-      setClipboardText(text);
+      lastAutoSyncedRef.current = trimmed;
+      setClipboardText(trimmed);
 
       const targetPeer = devices.find((d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId));
-      const targetIp = targetPeer?.ip || '127.0.0.1';
+      if (!targetPeer) {
+        if (!isAutomated) {
+          setPeerNotice('لا يوجد جهاز مقترن حالياً لنقل الحافظة إليه. شغّل Otium Link على الجهاز الآخر.');
+          setTimeout(() => setPeerNotice(null), 3500);
+        }
+        return;
+      }
+      const targetIp = targetPeer.ip;
 
       const { cleanedUrl, wasCleaned } = appSettings.cleanTrackingLinks
-        ? cleanUrl(text)
-        : { cleanedUrl: text, wasCleaned: false };
+        ? cleanUrl(trimmed)
+        : { cleanedUrl: trimmed, wasCleaned: false };
 
       // Record to history vault
       addClipboardHistoryItem(cleanedUrl, wasCleaned);
@@ -211,8 +220,9 @@ export const App: React.FC = () => {
         });
       },
       onClipboardReceived: (clip) => {
+        const trimmed = clip.text.trim();
         setClipboardText(clip.text);
-        lastAutoSyncedRef.current = clip.text;
+        lastAutoSyncedRef.current = trimmed;
         addClipboardHistoryItem(clip.text, false);
         playReceiveChime(appSettings.audioFeedback, appSettings.soundVolume);
 
@@ -236,6 +246,9 @@ export const App: React.FC = () => {
         ]);
       },
       onNativeClipboardChanged: (payload) => {
+        const trimmed = payload.text.trim();
+        if (trimmed === lastAutoSyncedRef.current) return;
+
         const { cleanedUrl, wasCleaned } = appSettings.cleanTrackingLinks
           ? cleanUrl(payload.text)
           : { cleanedUrl: payload.text, wasCleaned: false };
@@ -387,7 +400,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.0.0 المستقر
+                v1.0.1 المستقر
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
@@ -478,6 +491,13 @@ export const App: React.FC = () => {
 
       {/* Main Workspace */}
       <main className="flex-1 overflow-y-auto p-4 space-y-4">
+        {peerNotice && (
+          <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2 animate-in fade-in duration-150">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>{peerNotice}</span>
+          </div>
+        )}
+
         {/* ========================================================= */}
         {/* TAB 1: LIVE RADAR & HUB */}
         {/* ========================================================= */}
@@ -663,7 +683,12 @@ export const App: React.FC = () => {
                   const targetPeer = devices.find(
                     (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
                   );
-                  const targetIp = targetPeer?.ip || '127.0.0.1';
+                  if (!targetPeer) {
+                    setPeerNotice('لا يوجد جهاز مقترن حالياً لنقل الملفات إليه. شغّل Otium Link على الجهاز الآخر أولاً.');
+                    setTimeout(() => setPeerNotice(null), 3500);
+                    return;
+                  }
+                  const targetIp = targetPeer.ip;
 
                   for (const f of droppedFiles) {
                     const filePath = (f as any).path || f.name;
@@ -679,7 +704,7 @@ export const App: React.FC = () => {
                     progress: 1,
                     status: 'completed',
                     sender: 'هذا الجهاز',
-                    receiver: targetPeer?.name || 'الجهاز المقترن',
+                    receiver: targetPeer.name,
                     timestamp: Date.now(),
                     verified: true,
                   }));
@@ -715,7 +740,12 @@ export const App: React.FC = () => {
                       const targetPeer = devices.find(
                         (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
                       );
-                      const targetIp = targetPeer?.ip || '127.0.0.1';
+                      if (!targetPeer) {
+                        setPeerNotice('لا يوجد جهاز مقترن حالياً لنقل الملفات إليه. شغّل Otium Link على الجهاز الآخر أولاً.');
+                        setTimeout(() => setPeerNotice(null), 3500);
+                        return;
+                      }
+                      const targetIp = targetPeer.ip;
 
                       for (const f of files) {
                         const filePath = (f as any).path || f.name;
@@ -731,7 +761,7 @@ export const App: React.FC = () => {
                         progress: 1,
                         status: 'completed',
                         sender: 'هذا الجهاز',
-                        receiver: targetPeer?.name || 'الجهاز المقترن',
+                        receiver: targetPeer.name,
                         timestamp: Date.now(),
                         verified: true,
                       }));
