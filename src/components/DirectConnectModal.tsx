@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Network, Plus, Check, Laptop, Smartphone, AlertCircle } from 'lucide-react';
 import { Device } from '../core/types';
+import { addDirectPeer } from '../core/tauriBridge';
 
 interface DirectConnectModalProps {
   isOpen: boolean;
@@ -21,7 +22,7 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const trimmedIp = ipInput.trim();
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
@@ -31,18 +32,10 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
     }
 
     const trimmedName = nameInput.trim() || (osType === 'windows' ? 'حاسوب مباشر' : 'هاتف مباشر');
-    const newPeer: Device = {
-      id: `direct_${trimmedIp.replace(/\./g, '_')}`,
-      name: trimmedName,
-      os: osType,
-      ip: trimmedIp,
-      port: 42425,
-      lastSeen: Date.now(),
-      status: 'paired',
-      isSelf: false,
-    };
-
-    onAddDirectPeer(newPeer);
+    const peer = await addDirectPeer(trimmedIp, trimmedName, osType);
+    if (peer) {
+      onAddDirectPeer(peer);
+    }
     setIsSuccess(true);
     setTimeout(() => {
       setIsSuccess(false);
@@ -105,6 +98,9 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
                 setIpInput(e.target.value);
                 setErrorMsg(null);
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAdd();
+              }}
               placeholder="192.168.1.105"
               className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 text-sm font-mono dir-ltr text-left transition-all"
             />
@@ -116,6 +112,9 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
               type="text"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAdd();
+              }}
               placeholder="مثال: هاتف سامسونج"
               className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 text-xs transition-all"
             />

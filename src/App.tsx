@@ -270,26 +270,29 @@ export const App: React.FC = () => {
     setupNativeListeners({
       onPeerDiscovered: (newPeer) => {
         setDevices((prev) => {
-          const exists = prev.some((d) => d.id === newPeer.id);
+          const exists = prev.some((d) => d.id === newPeer.id || (!d.isSelf && d.ip === newPeer.ip));
           if (exists) {
-            return prev.map((d) => (d.id === newPeer.id ? newPeer : d));
+            return prev.map((d) => (d.id === newPeer.id || (!d.isSelf && d.ip === newPeer.ip) ? newPeer : d));
           }
+          showToast('info', 'تم اكتشاف جهاز جديد', `${newPeer.name} (${newPeer.ip})`);
           return [...prev, newPeer];
         });
         setSelectedPeerId((prev) => prev || newPeer.id);
-        showToast('info', 'تم اكتشاف جهاز جديد', `${newPeer.name} (${newPeer.ip})`);
       },
       onPeersUpdated: (freshPeers) => {
         setDevices((prev) => {
           const self = prev.find((d) => d.isSelf);
-          return self ? [self, ...freshPeers] : freshPeers;
+          const directPeers = prev.filter((d) => !d.isSelf && d.id.startsWith('direct_'));
+          const merged = [...freshPeers];
+          for (const dp of directPeers) {
+            if (!merged.some((p) => p.id === dp.id || p.ip === dp.ip)) {
+              merged.push(dp);
+            }
+          }
+          return self ? [self, ...merged] : merged;
         });
         setSelectedPeerId((current) => {
           if (!current) return freshPeers.length > 0 ? freshPeers[0].id : null;
-          const stillThere = freshPeers.some((p) => p.id === current);
-          if (!stillThere) {
-            return freshPeers.length > 0 ? freshPeers[0].id : null;
-          }
           return current;
         });
       },
@@ -647,7 +650,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.4.0 فائق الاستقرار
+                v1.5.0 منقّح بالكامل
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
@@ -668,7 +671,14 @@ export const App: React.FC = () => {
               const peers = await fetchDiscoveredPeers();
               setDevices((prev) => {
                 const self = prev.find((d) => d.isSelf);
-                return self ? [self, ...peers] : peers;
+                const directPeers = prev.filter((d) => !d.isSelf && d.id.startsWith('direct_'));
+                const merged = [...peers];
+                for (const dp of directPeers) {
+                  if (!merged.some((p) => p.id === dp.id || p.ip === dp.ip)) {
+                    merged.push(dp);
+                  }
+                }
+                return self ? [self, ...merged] : merged;
               });
               showToast('info', 'تم تحديث قائمة الأجهزة المتصلة');
             }}

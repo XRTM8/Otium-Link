@@ -278,6 +278,46 @@ impl NetworkManager {
         self.downloads_dir.lock().unwrap().clone()
     }
 
+    /// Manually adds a direct IP peer (for environments with AP Isolation or multicast blocking)
+    pub fn add_direct_peer(&self, ip: String, name: String, os: String) -> Result<PeerDevice, String> {
+        let trimmed_ip = ip.trim().to_string();
+        let parsed_ip: std::net::IpAddr = trimmed_ip
+            .parse()
+            .map_err(|e| format!("عنوان IP غير صالح: {}", e))?;
+
+        if !is_private_or_local_ip(&parsed_ip) {
+            return Err("العنوان ليس ضمن نطاق الشبكة المحلية الخاصة (RFC 1918)".to_string());
+        }
+
+        let clean_name = if name.trim().is_empty() {
+            format!("Direct-{}", trimmed_ip)
+        } else {
+            name.trim().chars().take(48).collect()
+        };
+
+        let peer_id = format!("direct_{}", trimmed_ip.replace('.', "_").replace(':', "_"));
+        let peer = PeerDevice {
+            id: peer_id.clone(),
+            name: clean_name,
+            os,
+            ip: trimmed_ip,
+            port: TCP_PORT,
+            last_seen: u64::MAX, // Persistent direct peer
+            is_self: false,
+        };
+
+        let mut table = self.peers.lock().unwrap();
+        table.insert(peer_id, peer.clone());
+        Ok(peer)
+    }
+
+    /// Removes a direct IP peer from the active peers table
+    pub fn remove_direct_peer(&self, id: &str) {
+        if let Ok(mut table) = self.peers.lock() {
+            table.remove(id);
+        }
+    }
+
     /// Starts local UDP discovery beacon broadcast, receiver, and heartbeat pruner
     pub fn start_discovery(&self, app: AppHandle) {
         let self_dev = self.self_device.clone();
@@ -366,16 +406,19 @@ impl NetworkManager {
 
                         let mut table = listener_peers.lock().unwrap();
                         if table.len() < 64 || table.contains_key(&beacon.id) {
+                            let is_new = !table.contains_key(&beacon.id);
                             table.insert(beacon.id, peer.clone());
-                            // Notify frontend of discovered or refreshed peer
-                            let _ = listener_app.emit("otium-link://peer-discovered", peer);
+                            // Only notify frontend when a brand-new peer is discovered to avoid toast spam
+                            if is_new {
+                                let _ = listener_app.emit("otium-link://peer-discovered", peer);
+                            }
                         }
                     }
                 }
             }
         });
 
-        // 3. Heartbeat & Stale Peer Pruner (Purges inactive peers after 10 seconds)
+        // 3. Heartbeat & Stale Peer Pruner (Purges inactive peers after 10 seconds, preserving direct peers)
         let pruner_peers = peers_table.clone();
         let pruner_app = app.clone();
         thread::spawn(move || {
@@ -388,7 +431,11 @@ impl NetworkManager {
 
                 let mut table = pruner_peers.lock().unwrap();
                 let initial_len = table.len();
-                table.retain(|_, peer| now.saturating_sub(peer.last_seen) < 10);
+                table.retain(|_, peer| {
+                    peer.last_seen == u64::MAX
+                        || peer.id.starts_with("direct_")
+                        || now.saturating_sub(peer.last_seen) < 10
+                });
                 if table.len() != initial_len {
                     let active_list: Vec<PeerDevice> = table.values().cloned().collect();
                     let _ = pruner_app.emit("otium-link://peers-updated", active_list);
@@ -914,5 +961,40 @@ mod tests {
         assert!(valid_file.exists());
 
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_direct_peer_management() {
+        let temp_dir = std::env::temp_dir().join("otium_test_direct_peer");
+        let nm = NetworkManager::new("TestNode".to_string(), temp_dir.clone());
+
+        // 1. Valid Private IP succeeds
+        let peer = nm.add_direct_peer("192.168.1.150".to_string(), "My Phone".to_string(), "android".to_string());
+        assert!(peer.is_ok());
+        let p = peer.unwrap();
+        assert_eq!(p.id, "direct_192_168_1_150");
+        assert_eq!(p.name, "My Phone");
+        assert_eq!(p.last_seen, u64::MAX);
+
+        // Verify stored in peers table
+        {
+            let table = nm.peers.lock().unwrap();
+            assert!(table.contains_key("direct_192_168_1_150"));
+        }
+
+        // 2. Reject public / WAN IP
+        let wan_res = nm.add_direct_peer("8.8.8.8".to_string(), "Attacker".to_string(), "linux".to_string());
+        assert!(wan_res.is_err());
+
+        // 3. Reject invalid IP format
+        let invalid_res = nm.add_direct_peer("not-an-ip".to_string(), "Bad".to_string(), "windows".to_string());
+        assert!(invalid_res.is_err());
+
+        // 4. Remove direct peer
+        nm.remove_direct_peer("direct_192_168_1_150");
+        {
+            let table = nm.peers.lock().unwrap();
+            assert!(!table.contains_key("direct_192_168_1_150"));
+        }
     }
 }

@@ -24,4 +24,9 @@ describe('formatBytes Utility', () => {
     expect(formatBytes(1024 * 1024 * 1024)).toBe('1 GB');
     expect(formatBytes(5 * 1024 * 1024 * 1024)).toBe('5 GB');
   });
+
+  it('safely handles sub-byte fractions without negative index undefined bug', () => {
+    expect(formatBytes(0.5)).toBe('0.5 B');
+    expect(formatBytes(0.1)).toBe('0.1 B');
+  });
 });

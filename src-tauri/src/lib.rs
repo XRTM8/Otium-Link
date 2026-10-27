@@ -84,6 +84,18 @@ fn set_download_dir(state: tauri::State<'_, AppState>, path: String) -> Result<(
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+fn strip_unc_prefix(path: &std::path::Path) -> std::path::PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(stripped) = s.strip_prefix(r"\\?\UNC\") {
+        std::path::PathBuf::from(format!(r"\\{}", stripped))
+    } else if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        std::path::PathBuf::from(stripped)
+    } else {
+        path.to_path_buf()
+    }
+}
+
 #[tauri::command]
 fn open_downloads_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let dir = state.network.get_downloads_dir();
@@ -91,7 +103,8 @@ fn open_downloads_folder(state: tauri::State<'_, AppState>) -> Result<(), String
 
     #[cfg(target_os = "windows")]
     {
-        let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+        let clean_dir = strip_unc_prefix(&dir);
+        let _ = std::process::Command::new("explorer").arg(&clean_dir).spawn();
     }
     #[cfg(target_os = "macos")]
     {
@@ -137,15 +150,16 @@ fn open_file(state: tauri::State<'_, AppState>, file_path: String) -> Result<(),
 
     #[cfg(target_os = "windows")]
     {
+        let clean_target = strip_unc_prefix(&canonical_target);
         if is_dangerous_executable {
             // For dangerous executable files, DO NOT execute directly! Reveal safely in Explorer
             let _ = std::process::Command::new("explorer")
-                .arg(format!("/select,\"{}\"", canonical_target.to_string_lossy()))
+                .arg(format!("/select,\"{}\"", clean_target.to_string_lossy()))
                 .spawn();
         } else {
             // Launch safe file viewer via explorer directly without cmd.exe
             let _ = std::process::Command::new("explorer")
-                .arg(&canonical_target)
+                .arg(&clean_target)
                 .spawn();
         }
     }
@@ -157,6 +171,17 @@ fn open_file(state: tauri::State<'_, AppState>, file_path: String) -> Result<(),
     {
         let _ = std::process::Command::new("xdg-open").arg(&canonical_target).spawn();
     }
+    Ok(())
+}
+
+#[tauri::command]
+fn add_direct_peer(state: tauri::State<'_, AppState>, ip: String, name: String, os: String) -> Result<PeerDevice, String> {
+    state.network.add_direct_peer(ip, name, os)
+}
+
+#[tauri::command]
+fn remove_direct_peer(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
+    state.network.remove_direct_peer(&id);
     Ok(())
 }
 
@@ -261,8 +286,28 @@ pub fn run() {
             get_download_dir,
             set_download_dir,
             open_downloads_folder,
-            open_file
+            open_file,
+            add_direct_peer,
+            remove_direct_peer
         ])
         .run(tauri::generate_context!())
         .expect("error while running otium link");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_strip_unc_prefix() {
+        let unc_local = std::path::Path::new(r"\\?\C:\Users\Test\Downloads\file.txt");
+        assert_eq!(strip_unc_prefix(unc_local), std::path::PathBuf::from(r"C:\Users\Test\Downloads\file.txt"));
+
+        let unc_network = std::path::Path::new(r"\\?\UNC\Server\Share\file.txt");
+        assert_eq!(strip_unc_prefix(unc_network), std::path::PathBuf::from(r"\\Server\Share\file.txt"));
+
+        let normal_path = std::path::Path::new(r"C:\Users\Test\Downloads\file.txt");
+        assert_eq!(strip_unc_prefix(normal_path), std::path::PathBuf::from(r"C:\Users\Test\Downloads\file.txt"));
+    }
 }

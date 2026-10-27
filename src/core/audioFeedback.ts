@@ -26,35 +26,37 @@ function getAudioContext(): AudioContext | null {
  */
 export function playReceiveChime(enabled: boolean = true, volume: number = 0.8) {
   if (!enabled || volume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-  const now = ctx.currentTime;
-  const gainScale = Math.min(Math.max(volume, 0), 1);
+    const now = ctx.currentTime;
+    const gainScale = Math.min(Math.max(volume, 0), 1);
 
-  // Note 1: 587.33 Hz (D5)
-  const osc1 = ctx.createOscillator();
-  const gain1 = ctx.createGain();
-  osc1.type = 'sine';
-  osc1.frequency.setValueAtTime(587.33, now);
-  gain1.gain.setValueAtTime(0.12 * gainScale, now);
-  gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-  osc1.connect(gain1);
-  gain1.connect(ctx.destination);
-  osc1.start(now);
-  osc1.stop(now + 0.35);
+    // Note 1: 587.33 Hz (D5)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.12 * gainScale, now);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
 
-  // Note 2: 880 Hz (A5)
-  const osc2 = ctx.createOscillator();
-  const gain2 = ctx.createGain();
-  osc2.type = 'sine';
-  osc2.frequency.setValueAtTime(880, now + 0.08);
-  gain2.gain.setValueAtTime(0.15 * gainScale, now + 0.08);
-  gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
-  osc2.connect(gain2);
-  gain2.connect(ctx.destination);
-  osc2.start(now + 0.08);
-  osc2.stop(now + 0.45);
+    // Note 2: 880 Hz (A5)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880, now + 0.08);
+    gain2.gain.setValueAtTime(0.15 * gainScale, now + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.08);
+    osc2.stop(now + 0.45);
+  } catch {}
 }
 
 /**
@@ -62,26 +64,28 @@ export function playReceiveChime(enabled: boolean = true, volume: number = 0.8) 
  */
 export function playSendChime(enabled: boolean = true, volume: number = 0.8) {
   if (!enabled || volume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-  const now = ctx.currentTime;
-  const gainScale = Math.min(Math.max(volume, 0), 1);
+    const now = ctx.currentTime;
+    const gainScale = Math.min(Math.max(volume, 0), 1);
 
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(440, now);
-  osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.18);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.18);
 
-  gain.gain.setValueAtTime(0.1 * gainScale, now);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    gain.gain.setValueAtTime(0.1 * gainScale, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
 
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.22);
+  } catch {}
 }
 
 /**
@@ -89,28 +93,30 @@ export function playSendChime(enabled: boolean = true, volume: number = 0.8) {
  */
 export function playSuccessChime(enabled: boolean = true, volume: number = 0.8) {
   if (!enabled || volume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-  const now = ctx.currentTime;
-  const gainScale = Math.min(Math.max(volume, 0), 1);
-  const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+    const now = ctx.currentTime;
+    const gainScale = Math.min(Math.max(volume, 0), 1);
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
 
-  notes.forEach((freq, idx) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const startTime = now + idx * 0.06;
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const startTime = now + idx * 0.06;
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, startTime);
-    gain.gain.setValueAtTime(0.09 * gainScale, startTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.4);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0.09 * gainScale, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.4);
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(startTime);
-    osc.stop(startTime + 0.4);
-  });
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.4);
+    });
+  } catch {}
 }
 
 /**
@@ -118,35 +124,37 @@ export function playSuccessChime(enabled: boolean = true, volume: number = 0.8) 
  */
 export function playWarningChime(enabled: boolean = true, volume: number = 0.8) {
   if (!enabled || volume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-  const now = ctx.currentTime;
-  const gainScale = Math.min(Math.max(volume, 0), 1);
+    const now = ctx.currentTime;
+    const gainScale = Math.min(Math.max(volume, 0), 1);
 
-  // Note 1: E4 (329.63 Hz)
-  const osc1 = ctx.createOscillator();
-  const gain1 = ctx.createGain();
-  osc1.type = 'sine';
-  osc1.frequency.setValueAtTime(329.63, now);
-  gain1.gain.setValueAtTime(0.08 * gainScale, now);
-  gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
-  osc1.connect(gain1);
-  gain1.connect(ctx.destination);
-  osc1.start(now);
-  osc1.stop(now + 0.25);
+    // Note 1: E4 (329.63 Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(329.63, now);
+    gain1.gain.setValueAtTime(0.08 * gainScale, now);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.25);
 
-  // Note 2: C4 (261.63 Hz)
-  const osc2 = ctx.createOscillator();
-  const gain2 = ctx.createGain();
-  osc2.type = 'sine';
-  osc2.frequency.setValueAtTime(261.63, now + 0.1);
-  gain2.gain.setValueAtTime(0.09 * gainScale, now + 0.1);
-  gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-  osc2.connect(gain2);
-  gain2.connect(ctx.destination);
-  osc2.start(now + 0.1);
-  osc2.stop(now + 0.35);
+    // Note 2: C4 (261.63 Hz)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(261.63, now + 0.1);
+    gain2.gain.setValueAtTime(0.09 * gainScale, now + 0.1);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.1);
+    osc2.stop(now + 0.35);
+  } catch {}
 }
 
 /**
@@ -154,25 +162,27 @@ export function playWarningChime(enabled: boolean = true, volume: number = 0.8) 
  */
 export function playDropChime(enabled: boolean = true, volume: number = 0.8) {
   if (!enabled || volume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-  const now = ctx.currentTime;
-  const gainScale = Math.min(Math.max(volume, 0), 1);
+    const now = ctx.currentTime;
+    const gainScale = Math.min(Math.max(volume, 0), 1);
 
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(580, now);
-  osc.frequency.exponentialRampToValueAtTime(880, now + 0.09);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(580, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.09);
 
-  gain.gain.setValueAtTime(0.09 * gainScale, now);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+    gain.gain.setValueAtTime(0.09 * gainScale, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
 
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.11);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.11);
+  } catch {}
 }
 
 /**
@@ -180,23 +190,25 @@ export function playDropChime(enabled: boolean = true, volume: number = 0.8) {
  */
 export function playDeleteChime(enabled: boolean = true, volume: number = 0.8) {
   if (!enabled || volume <= 0) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-  const now = ctx.currentTime;
-  const gainScale = Math.min(Math.max(volume, 0), 1);
+    const now = ctx.currentTime;
+    const gainScale = Math.min(Math.max(volume, 0), 1);
 
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(300, now);
-  osc.frequency.exponentialRampToValueAtTime(140, now + 0.14);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(300, now);
+    osc.frequency.exponentialRampToValueAtTime(140, now + 0.14);
 
-  gain.gain.setValueAtTime(0.08 * gainScale, now);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    gain.gain.setValueAtTime(0.08 * gainScale, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
 
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.16);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.16);
+  } catch {}
 }

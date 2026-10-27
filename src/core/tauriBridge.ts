@@ -133,6 +133,74 @@ export async function fetchDiscoveredPeers(): Promise<Device[]> {
   }
 }
 
+export async function addDirectPeer(
+  ip: string,
+  name: string,
+  os: 'windows' | 'android' | 'macos' | 'linux'
+): Promise<Device | null> {
+  const trimmedIp = ip.trim();
+  const cleanName = name.trim() || (os === 'windows' ? 'حاسوب مباشر' : 'هاتف مباشر');
+
+  if (!isTauriEnvironment()) {
+    return {
+      id: `direct_${trimmedIp.replace(/\./g, '_')}`,
+      name: cleanName,
+      os,
+      ip: trimmedIp,
+      port: 42425,
+      lastSeen: Date.now(),
+      status: 'paired',
+      isSelf: false,
+    };
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const raw = await invoke<{
+      id: string;
+      name: string;
+      os: string;
+      ip: string;
+      port: number;
+      last_seen: number;
+    }>('add_direct_peer', { ip: trimmedIp, name: cleanName, os });
+    return {
+      id: raw.id,
+      name: raw.name,
+      os: raw.os as Device['os'],
+      ip: raw.ip,
+      port: raw.port,
+      lastSeen: raw.last_seen,
+      status: 'paired',
+      isSelf: false,
+    };
+  } catch (err) {
+    console.warn('Failed to register direct peer in backend:', err);
+    return {
+      id: `direct_${trimmedIp.replace(/\./g, '_')}`,
+      name: cleanName,
+      os,
+      ip: trimmedIp,
+      port: 42425,
+      lastSeen: Date.now(),
+      status: 'paired',
+      isSelf: false,
+    };
+  }
+}
+
+export async function removeDirectPeer(id: string): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('remove_direct_peer', { id });
+    return true;
+  } catch (err) {
+    console.warn('Failed to remove direct peer:', err);
+    return false;
+  }
+}
+
 export async function transmitClipboard(targetIp: string, text: string): Promise<boolean> {
   if (!isTauriEnvironment()) {
     return true;

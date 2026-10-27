@@ -38,10 +38,19 @@ export function formatEtaArabic(seconds: number | null): string {
 
   const m = Math.floor(s / 60);
   const remSec = s % 60;
-  if (m === 1) return remSec > 0 ? `متبقي دقيقة و ${remSec} ثانية` : 'متبقي دقيقة واحدة';
-  if (m === 2) return remSec > 0 ? `متبقي دقيقتان و ${remSec} ثانية` : 'متبقي دقيقتان';
-  if (m >= 3 && m <= 10) return `متبقي ${m} دقائق`;
-  return `متبقي ${m} دقيقة`;
+  if (m < 60) {
+    if (m === 1) return remSec > 0 ? `متبقي دقيقة و ${remSec} ثانية` : 'متبقي دقيقة واحدة';
+    if (m === 2) return remSec > 0 ? `متبقي دقيقتان و ${remSec} ثانية` : 'متبقي دقيقتان';
+    if (m >= 3 && m <= 10) return `متبقي ${m} دقائق`;
+    return `متبقي ${m} دقيقة`;
+  }
+
+  const h = Math.floor(m / 60);
+  const remMin = m % 60;
+  if (h === 1) return remMin > 0 ? `متبقي ساعة و ${remMin} دقيقة` : 'متبقي ساعة واحدة';
+  if (h === 2) return remMin > 0 ? `متبقي ساعتان و ${remMin} دقيقة` : 'متبقي ساعتان';
+  if (h >= 3 && h <= 10) return `متبقي ${h} ساعات`;
+  return `متبقي ${h} ساعة`;
 }
 
 export function recordTransferProgress(

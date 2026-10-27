@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { isTauriEnvironment, fetchSelfDevice, fetchDiscoveredPeers, transmitClipboard, transmitFile } from '../tauriBridge';
+import {
+  isTauriEnvironment,
+  fetchSelfDevice,
+  fetchDiscoveredPeers,
+  transmitClipboard,
+  transmitFile,
+  addDirectPeer,
+  removeDirectPeer,
+} from '../tauriBridge';
 
 describe('Tauri Bridge & Fallback Safety', () => {
   it('detects non-Tauri environment in Node/Web gracefully', () => {
@@ -33,5 +41,16 @@ describe('Tauri Bridge & Fallback Safety', () => {
   it('safely handles empty target IP gracefully', async () => {
     const result = await transmitClipboard('', 'test');
     expect(typeof result).toBe('boolean');
+  });
+
+  it('creates direct peer in web fallback mode', async () => {
+    const peer = await addDirectPeer('192.168.1.150', 'Phone', 'android');
+    expect(peer).not.toBeNull();
+    expect(peer?.id).toBe('direct_192_168_1_150');
+    expect(peer?.name).toBe('Phone');
+    expect(peer?.ip).toBe('192.168.1.150');
+
+    const ok = await removeDirectPeer(peer!.id);
+    expect(ok).toBe(true);
   });
 });

@@ -20,6 +20,10 @@ describe('Real-Time Transfer Speed & ETA Calculator', () => {
     expect(formatEtaArabic(60)).toBe('متبقي دقيقة واحدة');
     expect(formatEtaArabic(120)).toBe('متبقي دقيقتان');
     expect(formatEtaArabic(180)).toBe('متبقي 3 دقائق');
+    expect(formatEtaArabic(3600)).toBe('متبقي ساعة واحدة');
+    expect(formatEtaArabic(7200)).toBe('متبقي ساعتان');
+    expect(formatEtaArabic(10800)).toBe('متبقي 3 ساعات');
+    expect(formatEtaArabic(3660)).toBe('متبقي ساعة و 1 دقيقة');
   });
 
   it('computes instantaneous smoothed throughput and dynamic ETA', () => {

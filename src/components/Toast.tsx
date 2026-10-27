@@ -59,7 +59,7 @@ const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => void
         <div className="min-w-0 text-right">
           <p className="text-xs font-bold leading-snug">{toast.title}</p>
           {toast.description && (
-            <p className="text-[11px] opacity-80 mt-0.5 leading-relaxed truncate">
+            <p className="text-[11px] opacity-80 mt-0.5 leading-relaxed break-words line-clamp-3">
               {toast.description}
             </p>
           )}
