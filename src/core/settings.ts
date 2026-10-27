@@ -1,14 +1,16 @@
 /**
- * Otium Link — Persistent Settings & Preferences
+ * Otium Link — Persistent Settings & Preferences Vault
  */
 
 export interface AppSettings {
   deviceName: string;
   autoClipboardSync: boolean;
   audioFeedback: boolean;
+  soundVolume: number; // 0.0 to 1.0
   cleanTrackingLinks: boolean;
   requireFileConfirmation: boolean;
   downloadDir: string;
+  trustedPeers: string[];
 }
 
 const SETTINGS_KEY = 'otium_link_settings_v1';
@@ -17,9 +19,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   deviceName: '',
   autoClipboardSync: true,
   audioFeedback: true,
+  soundVolume: 0.8,
   cleanTrackingLinks: true,
   requireFileConfirmation: false,
   downloadDir: '',
+  trustedPeers: [],
 };
 
 export function loadSettings(): AppSettings {
@@ -44,7 +48,7 @@ export function saveSettings(settings: Partial<AppSettings>): AppSettings {
         window.dispatchEvent(new CustomEvent('otium-settings-changed', { detail: updated }));
       }
     } catch {
-      // LocalStorage quota or access denied
+      // LocalStorage quota or access denied guard
     }
   }
   return updated;

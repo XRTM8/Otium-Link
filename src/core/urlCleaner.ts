@@ -1,62 +1,126 @@
 /**
- * Privacy Link Cleaner Engine for Otium Link.
- * Strips aggressive tracking parameters (UTM, Facebook, TikTok, X/Twitter, Google)
- * so shared links are clean, private, and lightweight.
+ * Otium Link — Privacy Shield & Smart URL Cleaner
+ * Strips surveillance, affiliate, and analytics trackers across all platforms.
  */
 
-const TRACKING_PARAMS = new Set([
+export const TRACKING_PARAMS: ReadonlySet<string> = new Set([
+  // Google Analytics & Marketing
   'utm_source',
   'utm_medium',
   'utm_campaign',
   'utm_term',
   'utm_content',
   'utm_id',
-  'fbclid',
   'gclid',
+  'gclsrc',
   'dclid',
-  'msclkid',
-  'mc_eid',
+  'gbraid',
+  'wbraid',
+
+  // Meta / Facebook / Instagram
+  'fbclid',
+  'fbadid',
   'igshid',
-  'si', // YouTube Share ID
-  'feature', // YouTube tracking
+  'ig_rid',
+  'fb_action_ids',
+  'fb_action_types',
+  'fb_source',
+
+  // Twitter / X
+  'twclid',
+  'ref_src',
+  'ref_url',
+
+  // YouTube & Google
+  'si',
+  'feature',
+  'pp',
+  'ved',
+  'ei',
+  'sei',
+
+  // TikTok
+  '_r',
+  '_t',
+  'checksum',
+  'is_from_webapp',
+  'sender_device',
+
+  // Amazon & E-commerce
+  'tag',
+  'linkCode',
+  'ref_',
+  'pf_rd_r',
+  'pf_rd_m',
+  'pf_rd_t',
+  'pf_rd_i',
+  'pf_rd_p',
+  'pf_rd_s',
+
+  // Email & Newsletter Marketing
+  'mc_cid',
+  'mc_eid',
+  'vero_id',
+  'wickedid',
   '_hsenc',
   '_hsmi',
-  'ref',
-  'ref_src',
-  's', // Twitter/X share
-  't', // Twitter/X timestamp
 ]);
 
-export function cleanUrl(rawUrl: string): { cleanedUrl: string; wasCleaned: boolean } {
+export interface CleanUrlResult {
+  cleanedUrl: string;
+  wasCleaned: boolean;
+  strippedParams: string[];
+}
+
+export function cleanUrl(rawUrl: string): CleanUrlResult {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return { cleanedUrl: '', wasCleaned: false, strippedParams: [] };
+  }
+
+  const trimmed = rawUrl.trim();
+
+  // If the input doesn't look like a URL with query parameters, return immediately
+  if (!trimmed.includes('?') && !trimmed.includes('&')) {
+    return { cleanedUrl: trimmed, wasCleaned: false, strippedParams: [] };
+  }
+
   try {
-    const trimmed = rawUrl.trim();
-    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-      return { cleanedUrl: rawUrl, wasCleaned: false };
+    // Add protocol if missing to enable URL parsing for plain domains
+    const hasProtocol = /^https?:\/\//i.test(trimmed);
+    const urlToParse = hasProtocol ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(urlToParse);
+
+    const strippedParams: string[] = [];
+    const keys = Array.from(parsed.searchParams.keys());
+
+    for (const key of keys) {
+      const lower = key.toLowerCase();
+      if (TRACKING_PARAMS.has(lower) || lower.startsWith('utm_') || lower.startsWith('pf_rd_')) {
+        parsed.searchParams.delete(key);
+        strippedParams.push(key);
+      }
     }
 
-    const parsed = new URL(trimmed);
-    let removedAny = false;
+    const wasCleaned = strippedParams.length > 0;
+    let result = parsed.toString();
 
-    // Remove tracking query parameters
-    const keysToDelete: string[] = [];
-    parsed.searchParams.forEach((_, key) => {
-      const lower = key.toLowerCase();
-      if (TRACKING_PARAMS.has(lower) || lower.startsWith('utm_')) {
-        keysToDelete.push(key);
-      }
-    });
+    // If user originally provided URL without protocol, strip artificial protocol
+    if (!hasProtocol) {
+      result = result.replace(/^https:\/\//i, '');
+    }
 
-    for (const key of keysToDelete) {
-      parsed.searchParams.delete(key);
-      removedAny = true;
+    // Clean trailing question mark if search params became completely empty
+    if (result.endsWith('?')) {
+      result = result.slice(0, -1);
     }
 
     return {
-      cleanedUrl: parsed.toString(),
-      wasCleaned: removedAny,
+      cleanedUrl: result,
+      wasCleaned,
+      strippedParams,
     };
   } catch {
-    return { cleanedUrl: rawUrl, wasCleaned: false };
+    return { cleanedUrl: trimmed, wasCleaned: false, strippedParams: [] };
   }
 }
 
