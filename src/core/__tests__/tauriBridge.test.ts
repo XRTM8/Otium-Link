@@ -29,4 +29,9 @@ describe('Tauri Bridge & Fallback Safety', () => {
     const result = await transmitFile('127.0.0.1', 'demo.pdf');
     expect(result).toBe(true);
   });
+
+  it('safely handles empty target IP gracefully', async () => {
+    const result = await transmitClipboard('', 'test');
+    expect(typeof result).toBe('boolean');
+  });
 });

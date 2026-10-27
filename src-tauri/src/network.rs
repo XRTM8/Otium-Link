@@ -143,6 +143,78 @@ pub fn get_unique_filepath(target_dir: &Path, safe_name: &str) -> PathBuf {
     }
 }
 
+/// Scans the target downloads directory for abandoned temporary files from interrupted
+/// or crashed transfers (.otlink.tmp) and cleans them up to prevent disk bloat.
+pub fn cleanup_orphaned_tmp_files(target_dir: &Path) -> usize {
+    let mut cleaned = 0;
+    if let Ok(entries) = fs::read_dir(target_dir) {
+        let now = SystemTime::now();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                if file_name.ends_with(".otlink.tmp") {
+                    let should_delete = if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            now.duration_since(modified).map(|d| d.as_secs() > 300).unwrap_or(true)
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    };
+
+                    if should_delete && fs::remove_file(&path).is_ok() {
+                        cleaned += 1;
+                    }
+                }
+            }
+        }
+    }
+    cleaned
+}
+
+/// Resilient UDP socket binder that retries on transient interface initialization delays
+fn bind_udp_with_retries(addr: &str, max_retries: u32, delay: Duration) -> Option<UdpSocket> {
+    for attempt in 1..=max_retries {
+        match UdpSocket::bind(addr) {
+            Ok(s) => return Some(s),
+            Err(e) => {
+                log::warn!("UDP bind attempt {}/{} to {} failed: {}. Retrying in {:?}...", attempt, max_retries, addr, e, delay);
+                thread::sleep(delay);
+            }
+        }
+    }
+    None
+}
+
+/// Resilient TCP listener binder that retries on TIME_WAIT or transient port conflicts
+fn bind_tcp_with_retries(addr: &str, max_retries: u32, delay: Duration) -> Option<TcpListener> {
+    for attempt in 1..=max_retries {
+        match TcpListener::bind(addr) {
+            Ok(l) => return Some(l),
+            Err(e) => {
+                log::warn!("TCP bind attempt {}/{} to {} failed: {}. Retrying in {:?}...", attempt, max_retries, addr, e, delay);
+                thread::sleep(delay);
+            }
+        }
+    }
+    None
+}
+
+/// RAII Scope Guard ensuring active incomplete temporary transfer files are always deleted if aborted
+struct TmpFileGuard<'a> {
+    path: &'a Path,
+    defused: bool,
+}
+
+impl<'a> Drop for TmpFileGuard<'a> {
+    fn drop(&mut self) {
+        if !self.defused && self.path.exists() {
+            let _ = fs::remove_file(self.path);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct NetworkManager {
     pub self_device: Arc<Mutex<PeerDevice>>,
@@ -214,10 +286,10 @@ impl NetworkManager {
         // 1. Broadcast Beacon Sender (Sends UDP broadcast every 3 seconds)
         let sender_dev = self_dev.clone();
         thread::spawn(move || {
-            let socket = match UdpSocket::bind("0.0.0.0:0") {
-                Ok(s) => s,
-                Err(e) => {
-                    log::warn!("Failed to bind UDP broadcast socket: {}", e);
+            let socket = match bind_udp_with_retries("0.0.0.0:0", 10, Duration::from_millis(500)) {
+                Some(s) => s,
+                None => {
+                    log::error!("Failed to bind UDP broadcast socket after retries");
                     return;
                 }
             };
@@ -249,10 +321,10 @@ impl NetworkManager {
         let listener_app = app.clone();
         let listener_peers = peers_table.clone();
         thread::spawn(move || {
-            let socket = match UdpSocket::bind(format!("0.0.0.0:{}", BROADCAST_PORT)) {
-                Ok(s) => s,
-                Err(e) => {
-                    log::warn!("Failed to bind UDP receiver socket on port {}: {}", BROADCAST_PORT, e);
+            let socket = match bind_udp_with_retries(&format!("0.0.0.0:{}", BROADCAST_PORT), 15, Duration::from_millis(500)) {
+                Some(s) => s,
+                None => {
+                    log::error!("Failed to bind UDP receiver socket on port {} after retries", BROADCAST_PORT);
                     return;
                 }
             };
@@ -303,12 +375,12 @@ impl NetworkManager {
             }
         });
 
-        // 3. Heartbeat & Stale Peer Pruner (Purges inactive peers after 12 seconds)
+        // 3. Heartbeat & Stale Peer Pruner (Purges inactive peers after 10 seconds)
         let pruner_peers = peers_table.clone();
         let pruner_app = app.clone();
         thread::spawn(move || {
             loop {
-                thread::sleep(Duration::from_secs(4));
+                thread::sleep(Duration::from_secs(3));
                 let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
@@ -316,7 +388,7 @@ impl NetworkManager {
 
                 let mut table = pruner_peers.lock().unwrap();
                 let initial_len = table.len();
-                table.retain(|_, peer| now.saturating_sub(peer.last_seen) < 12);
+                table.retain(|_, peer| now.saturating_sub(peer.last_seen) < 10);
                 if table.len() != initial_len {
                     let active_list: Vec<PeerDevice> = table.values().cloned().collect();
                     let _ = pruner_app.emit("otium-link://peers-updated", active_list);
@@ -364,11 +436,15 @@ impl NetworkManager {
         });
     }
 
-    /// Starts TCP Server on port 42425 with CRC32 integrity validation and atomic temporary writing
+    /// Starts TCP Server on port 42425 with CRC32 integrity validation, atomic temporary writing, and startup temp cleanup
     pub fn start_tcp_server(&self, app: AppHandle) {
         let downloads = self.downloads_dir.clone();
         if let Ok(dir) = downloads.lock() {
             let _ = fs::create_dir_all(&*dir);
+            let cleaned = cleanup_orphaned_tmp_files(&*dir);
+            if cleaned > 0 {
+                log::info!("Cleaned up {} orphaned temporary transfer files on startup", cleaned);
+            }
         }
 
         const MAX_CONCURRENT_TCP_CONNECTIONS: usize = 16;
@@ -380,10 +456,10 @@ impl NetworkManager {
         let rate_limiter = Arc::new(Mutex::new(HashMap::<std::net::IpAddr, (u32, std::time::Instant)>::new()));
 
         thread::spawn(move || {
-            let listener = match TcpListener::bind(format!("0.0.0.0:{}", TCP_PORT)) {
-                Ok(l) => l,
-                Err(e) => {
-                    log::warn!("Failed to bind TCP server on port {}: {}", TCP_PORT, e);
+            let listener = match bind_tcp_with_retries(&format!("0.0.0.0:{}", TCP_PORT), 15, Duration::from_millis(500)) {
+                Some(l) => l,
+                None => {
+                    log::error!("Failed to bind TCP server on port {} after retries", TCP_PORT);
                     return;
                 }
             };
@@ -498,6 +574,10 @@ impl NetworkManager {
                                         let temp_path = target_dir.join(&temp_filename);
 
                                         if let Ok(mut file) = File::create(&temp_path) {
+                                            let mut temp_guard = TmpFileGuard {
+                                                path: &temp_path,
+                                                defused: false,
+                                            };
                                             let mut received_bytes: u64 = 0;
                                             let mut chunk = [0u8; 65536]; // 64KB chunks
                                             let mut hasher = crc32fast::Hasher::new();
@@ -552,6 +632,7 @@ impl NetworkManager {
 
                                             if success && crc_verified {
                                                 if fs::rename(&temp_path, &unique_target).is_ok() {
+                                                    temp_guard.defused = true;
                                                     let final_name = unique_target
                                                         .file_name()
                                                         .map(|n| n.to_string_lossy().to_string())
@@ -593,14 +674,15 @@ impl NetworkManager {
         });
     }
 
-    /// Sends clipboard text to a remote peer over TCP
+    /// Sends clipboard text to a remote peer over TCP with 3-attempt resilient backoff retry
     pub fn send_clipboard(&self, target_ip: &str, text: String, sender: String) -> Result<(), String> {
-        let mut stream = TcpStream::connect_timeout(
-            &format!("{}:{}", target_ip, TCP_PORT).parse().map_err(|e| format!("{:?}", e))?,
-            Duration::from_secs(3),
-        ).map_err(|e| format!("Connection failed: {}", e))?;
-        let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
-        let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+        let target_addr: std::net::SocketAddr = format!("{}:{}", target_ip, TCP_PORT)
+            .parse()
+            .map_err(|e| format!("Invalid target IP address: {:?}", e))?;
+
+        if !is_private_or_local_ip(&target_addr.ip()) {
+            return Err("Target IP must be a private or local network address".to_string());
+        }
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -615,16 +697,44 @@ impl NetworkManager {
 
         let json = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
 
-        stream.write_all(PROTOCOL_MAGIC).map_err(|e| e.to_string())?;
-        stream.write_all(&[1u8]).map_err(|e| e.to_string())?; // Type 1 = Clipboard
-        stream.write_all(&(json.len() as u32).to_be_bytes()).map_err(|e| e.to_string())?;
-        stream.write_all(&json).map_err(|e| e.to_string())?;
-        stream.flush().map_err(|e| e.to_string())?;
+        // Resilient connection retry with exponential backoff: 3 attempts
+        let mut last_error = String::new();
+        for attempt in 1..=3 {
+            match TcpStream::connect_timeout(&target_addr, Duration::from_secs(3)) {
+                Ok(mut stream) => {
+                    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+                    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
 
-        Ok(())
+                    let write_res = (|| -> Result<(), std::io::Error> {
+                        stream.write_all(PROTOCOL_MAGIC)?;
+                        stream.write_all(&[1u8])?; // Type 1 = Clipboard
+                        stream.write_all(&(json.len() as u32).to_be_bytes())?;
+                        stream.write_all(&json)?;
+                        stream.flush()?;
+                        Ok(())
+                    })();
+
+                    match write_res {
+                        Ok(()) => return Ok(()),
+                        Err(e) => {
+                            last_error = format!("Stream write failed on attempt {}: {}", attempt, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    last_error = format!("Connection failed on attempt {}: {}", attempt, e);
+                }
+            }
+
+            if attempt < 3 {
+                thread::sleep(Duration::from_millis(attempt as u64 * 250));
+            }
+        }
+
+        Err(format!("Transmission failed after 3 attempts: {}", last_error))
     }
 
-    /// Streams a local file directly to a remote peer over TCP with running CRC32 end-to-end verification
+    /// Streams a local file directly to a remote peer over TCP with 3-attempt connection retry and running CRC32 verification
     pub fn send_file<F>(&self, target_ip: &str, file_path: PathBuf, sender: String, mut on_progress: F) -> Result<(), String>
     where
         F: FnMut(u64, u64),
@@ -638,12 +748,13 @@ impl NetworkManager {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "file.bin".to_string());
 
-        let mut stream = TcpStream::connect_timeout(
-            &format!("{}:{}", target_ip, TCP_PORT).parse().map_err(|e| format!("{:?}", e))?,
-            Duration::from_secs(5),
-        ).map_err(|e| format!("Connection failed: {}", e))?;
-        let _ = stream.set_write_timeout(Some(Duration::from_secs(15)));
-        let _ = stream.set_read_timeout(Some(Duration::from_secs(15)));
+        let target_addr: std::net::SocketAddr = format!("{}:{}", target_ip, TCP_PORT)
+            .parse()
+            .map_err(|e| format!("Invalid target IP address: {:?}", e))?;
+
+        if !is_private_or_local_ip(&target_addr.ip()) {
+            return Err("Target IP must be a private or local network address".to_string());
+        }
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -660,10 +771,34 @@ impl NetworkManager {
 
         let header_json = serde_json::to_vec(&header).map_err(|e| e.to_string())?;
 
-        stream.write_all(PROTOCOL_MAGIC).map_err(|e| e.to_string())?;
-        stream.write_all(&[2u8]).map_err(|e| e.to_string())?; // Type 2 = Streamed File
-        stream.write_all(&(header_json.len() as u32).to_be_bytes()).map_err(|e| e.to_string())?;
-        stream.write_all(&header_json).map_err(|e| e.to_string())?;
+        // Connect with retry (up to 3 attempts with backoff)
+        let mut stream = {
+            let mut conn_stream = None;
+            let mut last_err = String::new();
+            for attempt in 1..=3 {
+                match TcpStream::connect_timeout(&target_addr, Duration::from_secs(5)) {
+                    Ok(s) => {
+                        conn_stream = Some(s);
+                        break;
+                    }
+                    Err(e) => {
+                        last_err = format!("Attempt {}: {}", attempt, e);
+                        if attempt < 3 {
+                            thread::sleep(Duration::from_millis(attempt as u64 * 300));
+                        }
+                    }
+                }
+            }
+            conn_stream.ok_or_else(|| format!("Connection failed after 3 attempts: {}", last_err))?
+        };
+
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(20)));
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(20)));
+
+        stream.write_all(PROTOCOL_MAGIC).map_err(|e| format!("Header send error: {}", e))?;
+        stream.write_all(&[2u8]).map_err(|e| format!("Header send error: {}", e))?; // Type 2 = Streamed File
+        stream.write_all(&(header_json.len() as u32).to_be_bytes()).map_err(|e| format!("Header send error: {}", e))?;
+        stream.write_all(&header_json).map_err(|e| format!("Header send error: {}", e))?;
 
         // Stream file chunks directly while calculating running CRC32
         let mut buffer = [0u8; 65536]; // 64KB buffer
@@ -671,11 +806,11 @@ impl NetworkManager {
         let mut sent_bytes: u64 = 0;
 
         loop {
-            let n = file.read(&mut buffer).map_err(|e| e.to_string())?;
+            let n = file.read(&mut buffer).map_err(|e| format!("File read error: {}", e))?;
             if n == 0 {
                 break;
             }
-            stream.write_all(&buffer[..n]).map_err(|e| e.to_string())?;
+            stream.write_all(&buffer[..n]).map_err(|e| format!("Socket stream error: {}", e))?;
             hasher.update(&buffer[..n]);
             sent_bytes += n as u64;
             on_progress(sent_bytes, file_size);
@@ -683,8 +818,8 @@ impl NetworkManager {
 
         // Send 4-byte CRC32 trailer
         let final_crc = hasher.finalize();
-        stream.write_all(&final_crc.to_be_bytes()).map_err(|e| e.to_string())?;
-        stream.flush().map_err(|e| e.to_string())?;
+        stream.write_all(&final_crc.to_be_bytes()).map_err(|e| format!("CRC trailer error: {}", e))?;
+        stream.flush().map_err(|e| format!("Flush error: {}", e))?;
 
         Ok(())
     }
@@ -758,5 +893,26 @@ mod tests {
         // WAN / Public IPs must be rejected
         assert!(!is_private_or_local_ip(&"8.8.8.8".parse::<IpAddr>().unwrap()));
         assert!(!is_private_or_local_ip(&"1.1.1.1".parse::<IpAddr>().unwrap()));
+    }
+
+    #[test]
+    fn test_cleanup_orphaned_tmp_files() {
+        let temp_dir = std::env::temp_dir().join("otium_test_cleanup_tmp");
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let valid_file = temp_dir.join("photo.jpg");
+        let _ = File::create(&valid_file);
+
+        let tmp_file = temp_dir.join(".document_123.otlink.tmp");
+        let _ = File::create(&tmp_file);
+
+        assert!(valid_file.exists());
+        assert!(tmp_file.exists());
+
+        // Calling cleanup (for files created just now without age wait) won't delete fresh files unless age criteria met
+        let _ = cleanup_orphaned_tmp_files(&temp_dir);
+        assert!(valid_file.exists());
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

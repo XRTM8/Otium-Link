@@ -184,31 +184,56 @@ export const App: React.FC = () => {
       // Record to history vault
       addClipboardHistoryItem(cleanedUrl, wasCleaned);
 
-      await transmitClipboard(targetIp, cleanedUrl);
-      playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+      const success = await transmitClipboard(targetIp, cleanedUrl);
 
-      const newTransfer: TransferItem = {
-        id: `tx_${Date.now()}`,
-        name: cleanedUrl.length > 35 ? `${cleanedUrl.substring(0, 35)}...` : cleanedUrl,
-        size: new Blob([cleanedUrl]).size,
-        type: wasCleaned ? 'link' : 'text',
-        progress: 1,
-        status: 'completed',
-        sender: 'هذا الجهاز',
-        receiver: targetPeer.name,
-        timestamp: Date.now(),
-        verified: true,
-      };
-      setTransfers((prev) => [newTransfer, ...prev]);
+      if (success) {
+        playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
 
-      if (!isAutomated) {
-        setCopiedSuccess(true);
-        setTimeout(() => setCopiedSuccess(false), 2000);
-        showToast(
-          'success',
-          'تم إرسال النص للجهاز بنجاح',
-          wasCleaned ? `تم تطهير ${strippedParams.length} بارامترات تتبع` : `إلى ${targetPeer.name}`
-        );
+        const newTransfer: TransferItem = {
+          id: `tx_${Date.now()}`,
+          name: cleanedUrl.length > 35 ? `${cleanedUrl.substring(0, 35)}...` : cleanedUrl,
+          size: new Blob([cleanedUrl]).size,
+          type: wasCleaned ? 'link' : 'text',
+          progress: 1,
+          status: 'completed',
+          sender: 'هذا الجهاز',
+          receiver: targetPeer.name,
+          timestamp: Date.now(),
+          verified: true,
+        };
+        setTransfers((prev) => [newTransfer, ...prev]);
+
+        if (!isAutomated) {
+          setCopiedSuccess(true);
+          setTimeout(() => setCopiedSuccess(false), 2000);
+          showToast(
+            'success',
+            'تم إرسال النص للجهاز بنجاح',
+            wasCleaned ? `تم تطهير ${strippedParams.length} بارامترات تتبع` : `إلى ${targetPeer.name}`
+          );
+        }
+      } else {
+        const failedTransfer: TransferItem = {
+          id: `tx_${Date.now()}`,
+          name: cleanedUrl.length > 35 ? `${cleanedUrl.substring(0, 35)}...` : cleanedUrl,
+          size: new Blob([cleanedUrl]).size,
+          type: wasCleaned ? 'link' : 'text',
+          progress: 0,
+          status: 'failed',
+          sender: 'هذا الجهاز',
+          receiver: targetPeer.name,
+          timestamp: Date.now(),
+          error: 'تعذر الاتصال بالجهاز المستهدف عبر الشبكة',
+        };
+        setTransfers((prev) => [failedTransfer, ...prev]);
+
+        if (!isAutomated) {
+          showToast(
+            'warning',
+            'تعذر إرسال النص',
+            `تحقق من اتصال ${targetPeer.name} بنفس شبكة Wi-Fi أو استخدم الاتصال المباشر IP`
+          );
+        }
       }
     },
     [appSettings.audioFeedback, appSettings.cleanTrackingLinks, appSettings.soundVolume, devices, selectedPeerId, showToast]
@@ -258,6 +283,14 @@ export const App: React.FC = () => {
         setDevices((prev) => {
           const self = prev.find((d) => d.isSelf);
           return self ? [self, ...freshPeers] : freshPeers;
+        });
+        setSelectedPeerId((current) => {
+          if (!current) return freshPeers.length > 0 ? freshPeers[0].id : null;
+          const stillThere = freshPeers.some((p) => p.id === current);
+          if (!stillThere) {
+            return freshPeers.length > 0 ? freshPeers[0].id : null;
+          }
+          return current;
         });
       },
       onClipboardReceived: (clip) => {
@@ -537,26 +570,56 @@ export const App: React.FC = () => {
                 return;
               }
 
+              let successCount = 0;
+              let failCount = 0;
+
               for (const f of droppedFiles) {
                 const filePath = (f as any).path || f.name;
-                await transmitFile(targetPeer.ip, filePath);
-                playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+                const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+                const ok = await transmitFile(targetPeer.ip, filePath);
+                if (ok) {
+                  successCount++;
+                  playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+                  setTransfers((prev) => [
+                    {
+                      id: txId,
+                      name: f.name,
+                      size: f.size,
+                      type: 'file',
+                      progress: 1,
+                      status: 'completed',
+                      sender: 'هذا الجهاز',
+                      receiver: targetPeer.name,
+                      timestamp: Date.now(),
+                      verified: true,
+                    },
+                    ...prev,
+                  ]);
+                } else {
+                  failCount++;
+                  setTransfers((prev) => [
+                    {
+                      id: txId,
+                      name: f.name,
+                      size: f.size,
+                      type: 'file',
+                      progress: 0,
+                      status: 'failed',
+                      sender: 'هذا الجهاز',
+                      receiver: targetPeer.name,
+                      timestamp: Date.now(),
+                      error: 'تعذر الاتصال بالجهاز لنقل الملف',
+                    },
+                    ...prev,
+                  ]);
+                }
               }
 
-              const newItems: TransferItem[] = droppedFiles.map((f) => ({
-                id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                name: f.name,
-                size: f.size,
-                type: 'file',
-                progress: 1,
-                status: 'completed',
-                sender: 'هذا الجهاز',
-                receiver: targetPeer.name,
-                timestamp: Date.now(),
-                verified: true,
-              }));
-              setTransfers((prev) => [...newItems, ...prev]);
-              showToast('success', `جارٍ إرسال ${droppedFiles.length} ملفات`, `إلى ${targetPeer.name}`);
+              if (successCount > 0 && failCount === 0) {
+                showToast('success', `تم إرسال ${successCount} ملفات بنجاح ✓`, `إلى ${targetPeer.name}`);
+              } else if (failCount > 0) {
+                showToast('warning', `تعذر إرسال ${failCount} ملفات`, `يرجى التحقق من اتصال ${targetPeer.name}`);
+              }
             }
           }}
           className="fixed inset-0 z-50 bg-[#07090e]/92 backdrop-blur-md flex flex-col items-center justify-center border-4 border-dashed border-emerald-400 p-6 animate-in fade-in duration-150"
@@ -584,7 +647,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.3.0 فائقة السلاسة
+                v1.4.0 فائق الاستقرار
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
@@ -850,27 +913,56 @@ export const App: React.FC = () => {
                       return;
                     }
                     const targetIp = targetPeer.ip;
+                    let successCount = 0;
+                    let failCount = 0;
 
                     for (const f of files) {
                       const filePath = (f as any).path || f.name;
-                      await transmitFile(targetIp, filePath);
-                      playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+                      const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+                      const ok = await transmitFile(targetIp, filePath);
+                      if (ok) {
+                        successCount++;
+                        playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+                        setTransfers((prev) => [
+                          {
+                            id: txId,
+                            name: f.name,
+                            size: f.size,
+                            type: 'file',
+                            progress: 1,
+                            status: 'completed',
+                            sender: 'هذا الجهاز',
+                            receiver: targetPeer.name,
+                            timestamp: Date.now(),
+                            verified: true,
+                          },
+                          ...prev,
+                        ]);
+                      } else {
+                        failCount++;
+                        setTransfers((prev) => [
+                          {
+                            id: txId,
+                            name: f.name,
+                            size: f.size,
+                            type: 'file',
+                            progress: 0,
+                            status: 'failed',
+                            sender: 'هذا الجهاز',
+                            receiver: targetPeer.name,
+                            timestamp: Date.now(),
+                            error: 'تعذر الاتصال بالجهاز لنقل الملف',
+                          },
+                          ...prev,
+                        ]);
+                      }
                     }
 
-                    const newItems: TransferItem[] = files.map((f) => ({
-                      id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                      name: f.name,
-                      size: f.size,
-                      type: 'file',
-                      progress: 1,
-                      status: 'completed',
-                      sender: 'هذا الجهاز',
-                      receiver: targetPeer.name,
-                      timestamp: Date.now(),
-                      verified: true,
-                    }));
-                    setTransfers((prev) => [...newItems, ...prev]);
-                    showToast('success', `تم إرسال ${files.length} ملفات`, `إلى ${targetPeer.name}`);
+                    if (successCount > 0 && failCount === 0) {
+                      showToast('success', `تم إرسال ${successCount} ملفات بنجاح ✓`, `إلى ${targetPeer.name}`);
+                    } else if (failCount > 0) {
+                      showToast('warning', `تعذر إرسال ${failCount} ملفات`, `يرجى التحقق من اتصال ${targetPeer.name}`);
+                    }
                   }
                 }}
               />
