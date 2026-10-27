@@ -584,7 +584,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.2.0 فائق التحصين
+                v1.3.0 فائقة السلاسة
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
@@ -610,7 +610,7 @@ export const App: React.FC = () => {
               showToast('info', 'تم تحديث قائمة الأجهزة المتصلة');
             }}
             title="تحديث واستكشاف الأجهزة"
-            className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.08] transition-colors otium-press"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -618,7 +618,7 @@ export const App: React.FC = () => {
           <button
             onClick={() => setIsSettingsOpen(true)}
             title="الإعدادات والتخصيص"
-            className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+            className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.08] transition-colors otium-press"
           >
             <SettingsIcon className="w-4 h-4" />
           </button>
@@ -629,7 +629,7 @@ export const App: React.FC = () => {
       <nav className="flex items-center px-4 pt-2.5 pb-1 border-b border-white/[0.06] bg-black/20 gap-2 shrink-0">
         <button
           onClick={() => setActiveTab('live')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press ${
             activeTab === 'live'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
@@ -641,7 +641,7 @@ export const App: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('clipboard')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press ${
             activeTab === 'clipboard'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
@@ -658,7 +658,7 @@ export const App: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('transfers')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press ${
             activeTab === 'transfers'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
@@ -680,7 +680,7 @@ export const App: React.FC = () => {
         {/* TAB 1: LIVE RADAR & HUB */}
         {/* ========================================================= */}
         {activeTab === 'live' && (
-          <>
+          <div key="tab-live" className="animate-otium-enter space-y-4">
             {/* Visual Radar Scanner */}
             <RadarVisualizer
               devices={devices}
@@ -715,7 +715,7 @@ export const App: React.FC = () => {
                         updated.cleanTrackingLinks ? 'تم تفعيل درع الخصوصية' : 'تم تعطيل درع الخصوصية'
                       );
                     }}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold flex items-center gap-1 transition-colors ${
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold flex items-center gap-1 transition-colors otium-press ${
                       appSettings.cleanTrackingLinks
                         ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                         : 'bg-white/[0.04] text-gray-400 border-white/[0.08]'
@@ -739,7 +739,7 @@ export const App: React.FC = () => {
                         updated.autoClipboardSync ? 'تم تفعيل المزامنة التلقائية' : 'تم إيقاف المزامنة التلقائية'
                       );
                     }}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-bold flex items-center gap-1 transition-colors ${
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-bold flex items-center gap-1 transition-colors otium-press ${
                       appSettings.autoClipboardSync
                         ? 'bg-emerald-500 text-black border-emerald-400'
                         : 'bg-white/[0.06] text-gray-400 border-white/[0.08]'
@@ -787,7 +787,7 @@ export const App: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleCopyClipboard()}
-                      className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold flex items-center gap-1.5 transition-colors otium-press"
                     >
                       {copiedSuccess ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -798,7 +798,7 @@ export const App: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleTransmitClipboardText(clipboardText, false)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 transition-colors otium-press shadow-sm"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>إرسال للجهاز المقترن فوراً</span>
@@ -826,7 +826,7 @@ export const App: React.FC = () => {
               </div>
               <button
                 type="button"
-                className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold border border-white/[0.08] transition-colors"
+                className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold border border-white/[0.08] transition-colors otium-press"
               >
                 <span>أو اختر ملفاً من جهازك (Ctrl+O)</span>
               </button>
@@ -875,300 +875,304 @@ export const App: React.FC = () => {
                 }}
               />
             </section>
-          </>
+          </div>
         )}
 
         {/* ========================================================= */}
         {/* TAB 2: CLIPBOARD HISTORY VAULT */}
         {/* ========================================================= */}
         {activeTab === 'clipboard' && (
-          <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-4">
-            {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-bold text-white">خزينة سجل الحافظة المشفر محلياً</span>
-                <span className="text-xs text-gray-400">({clipboardHistory.length} عنصر)</span>
+          <div key="tab-clipboard" className="animate-otium-enter">
+            <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-4">
+              {/* Header & Controls */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-emerald-400" />
+                  <span className="text-sm font-bold text-white">خزينة سجل الحافظة المشفر محلياً</span>
+                  <span className="text-xs text-gray-400">({clipboardHistory.length} عنصر)</span>
+                </div>
+
+                {/* Search bar */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={clipboardSearch}
+                    onChange={(e) => setClipboardSearch(e.target.value)}
+                    placeholder="بحث في النصوص المنسوخة..."
+                    className="w-full pr-8 pl-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+                  />
+                </div>
               </div>
 
-              {/* Search bar */}
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={clipboardSearch}
-                  onChange={(e) => setClipboardSearch(e.target.value)}
-                  placeholder="بحث في النصوص المنسوخة..."
-                  className="w-full pr-8 pl-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
-                />
-              </div>
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-              <button
-                onClick={() => setClipboardFilter('all')}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors ${
-                  clipboardFilter === 'all'
-                    ? 'bg-emerald-500 text-slate-950 font-bold'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                الكل
-              </button>
-              <button
-                onClick={() => setClipboardFilter('url')}
-                className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors ${
-                  clipboardFilter === 'url'
-                    ? 'bg-emerald-500 text-slate-950 font-bold'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                <Link className="w-3 h-3" />
-                <span>الروابط</span>
-              </button>
-              <button
-                onClick={() => setClipboardFilter('code')}
-                className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors ${
-                  clipboardFilter === 'code'
-                    ? 'bg-emerald-500 text-slate-950 font-bold'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                <Code className="w-3 h-3" />
-                <span>الأكواد</span>
-              </button>
-              <button
-                onClick={() => setClipboardFilter('number')}
-                className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors ${
-                  clipboardFilter === 'number'
-                    ? 'bg-emerald-500 text-slate-950 font-bold'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                <Hash className="w-3 h-3" />
-                <span>الأرقام</span>
-              </button>
-              <button
-                onClick={() => setClipboardFilter('text')}
-                className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors ${
-                  clipboardFilter === 'text'
-                    ? 'bg-emerald-500 text-slate-950 font-bold'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                <FileText className="w-3 h-3" />
-                <span>النصوص</span>
-              </button>
-            </div>
-
-            {/* List */}
-            <div className="space-y-2">
-              {filteredHistory.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition-all space-y-2"
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                <button
+                  onClick={() => setClipboardFilter('all')}
+                  className={`px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
+                    clipboardFilter === 'all'
+                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      : 'bg-white/5 text-gray-400 hover:text-white'
+                  }`}
                 >
-                  <div className="flex items-center justify-between text-[11px] text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${
-                          item.type === 'url'
-                            ? 'bg-emerald-500/15 text-emerald-400'
-                            : item.type === 'code'
-                            ? 'bg-cyan-500/15 text-cyan-400'
-                            : item.type === 'number'
-                            ? 'bg-amber-500/15 text-amber-400'
-                            : 'bg-slate-500/15 text-slate-300'
-                        }`}
-                      >
-                        {item.type === 'url'
-                          ? 'رابط'
-                          : item.type === 'code'
-                          ? 'كود برمجي'
-                          : item.type === 'number'
-                          ? 'رقم هاتف'
-                          : 'نص'}
-                      </span>
-                      {item.isCleanedUrl && (
-                        <span className="text-emerald-400 text-[10px] flex items-center gap-1">
-                          <Sparkles className="w-2.5 h-2.5" />
-                          <span>مطهر من التتبع</span>
-                        </span>
-                      )}
-                    </div>
-                    <span className="font-mono text-[10px]">{formatTimestamp(item.timestamp)}</span>
-                  </div>
+                  الكل
+                </button>
+                <button
+                  onClick={() => setClipboardFilter('url')}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
+                    clipboardFilter === 'url'
+                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      : 'bg-white/5 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Link className="w-3 h-3" />
+                  <span>الروابط</span>
+                </button>
+                <button
+                  onClick={() => setClipboardFilter('code')}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
+                    clipboardFilter === 'code'
+                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      : 'bg-white/5 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Code className="w-3 h-3" />
+                  <span>الأكواد</span>
+                </button>
+                <button
+                  onClick={() => setClipboardFilter('number')}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
+                    clipboardFilter === 'number'
+                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      : 'bg-white/5 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Hash className="w-3 h-3" />
+                  <span>الأرقام</span>
+                </button>
+                <button
+                  onClick={() => setClipboardFilter('text')}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
+                    clipboardFilter === 'text'
+                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      : 'bg-white/5 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <FileText className="w-3 h-3" />
+                  <span>النصوص</span>
+                </button>
+              </div>
 
-                  <p
-                    className={`text-xs text-gray-200 line-clamp-3 select-text ${
-                      item.type === 'code' ? 'font-mono bg-black/30 p-2 rounded-lg' : ''
-                    }`}
+              {/* List */}
+              <div className="space-y-2">
+                {filteredHistory.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition-all space-y-2"
                   >
-                    {item.text}
-                  </p>
-
-                  <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
-                    <span className="text-[10px] text-gray-500 font-mono">
-                      {item.text.length} حرفاً
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => handleCopyClipboard(item.text, item.id)}
-                        title="نسخ إلى الحافظة"
-                        className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-gray-300 flex items-center gap-1 transition-colors"
-                      >
-                        {copiedHistoryId === item.id ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400">تم النسخ</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>نسخ</span>
-                          </>
+                    <div className="flex items-center justify-between text-[11px] text-gray-400">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${
+                            item.type === 'url'
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : item.type === 'code'
+                              ? 'bg-cyan-500/15 text-cyan-400'
+                              : item.type === 'number'
+                              ? 'bg-amber-500/15 text-amber-400'
+                              : 'bg-slate-500/15 text-slate-300'
+                          }`}
+                        >
+                          {item.type === 'url'
+                            ? 'رابط'
+                            : item.type === 'code'
+                            ? 'كود برمجي'
+                            : item.type === 'number'
+                            ? 'رقم هاتف'
+                            : 'نص'}
+                        </span>
+                        {item.isCleanedUrl && (
+                          <span className="text-emerald-400 text-[10px] flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>مطهر من التتبع</span>
+                          </span>
                         )}
-                      </button>
+                      </div>
+                      <span className="font-mono text-[10px]">{formatTimestamp(item.timestamp)}</span>
+                    </div>
 
-                      <button
-                        onClick={() => handleTransmitClipboardText(item.text, false)}
-                        title="إرسال للجهاز المقترن"
-                        className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-colors"
-                      >
-                        <Send className="w-3 h-3" />
-                        <span>إرسال</span>
-                      </button>
+                    <p
+                      className={`text-xs text-gray-200 line-clamp-3 select-text ${
+                        item.type === 'code' ? 'font-mono bg-black/30 p-2 rounded-lg' : ''
+                      }`}
+                    >
+                      {item.text}
+                    </p>
 
-                      <button
-                        onClick={() => {
-                          removeClipboardHistoryItem(item.id);
-                          playDeleteChime(appSettings.audioFeedback, appSettings.soundVolume);
-                        }}
-                        title="حذف هذا العنصر"
-                        className="p-1 rounded-lg text-gray-500 hover:text-red-400 hover:bg-white/5 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        {item.text.length} حرفاً
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleCopyClipboard(item.text, item.id)}
+                          title="نسخ إلى الحافظة"
+                          className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-gray-300 flex items-center gap-1 transition-colors otium-press"
+                        >
+                          {copiedHistoryId === item.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span className="text-emerald-400">تم النسخ</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>نسخ</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => handleTransmitClipboardText(item.text, false)}
+                          title="إرسال للجهاز المقترن"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-colors otium-press"
+                        >
+                          <Send className="w-3 h-3" />
+                          <span>إرسال</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            removeClipboardHistoryItem(item.id);
+                            playDeleteChime(appSettings.audioFeedback, appSettings.soundVolume);
+                          }}
+                          title="حذف هذا العنصر"
+                          className="p-1 rounded-lg text-gray-500 hover:text-red-400 hover:bg-white/5 transition-colors otium-press"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              {filteredHistory.length === 0 && (
-                <div className="p-8 text-center text-xs text-gray-400 bg-white/[0.01] rounded-xl border border-white/[0.04]">
-                  لا توجد عناصر مطابقة في الحافظة حالياً. انسخ أي نص لبدء الحفظ التلقائي.
-                </div>
-              )}
-            </div>
-          </section>
+                {filteredHistory.length === 0 && (
+                  <div className="p-8 text-center text-xs text-gray-400 bg-white/[0.01] rounded-xl border border-white/[0.04]">
+                    لا توجد عناصر مطابقة في الحافظة حالياً. انسخ أي نص لبدء الحفظ التلقائي.
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
         )}
 
         {/* ========================================================= */}
         {/* TAB 3: TRANSFERS & FILES HISTORY */}
         {/* ========================================================= */}
         {activeTab === 'transfers' && (
-          <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-                <FileText className="w-4 h-4 text-emerald-400" />
-                <span>سجل النقل اللحظي والملفات المتبادلة</span>
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-400 font-mono">{transfers.length} عناصر</span>
-                <button
-                  onClick={handleClearHistory}
-                  title="مسح السجل"
-                  className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-white/[0.05] transition-colors text-[10px] flex items-center gap-1"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>مسح السجل</span>
-                </button>
+          <div key="tab-transfers" className="animate-otium-enter">
+            <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <span>سجل النقل اللحظي والملفات المتبادلة</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400 font-mono">{transfers.length} عناصر</span>
+                  <button
+                    onClick={handleClearHistory}
+                    title="مسح السجل"
+                    className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-white/[0.05] transition-colors text-[10px] flex items-center gap-1 otium-press"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>مسح السجل</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              {transfers.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between text-xs transition-all hover:bg-white/[0.04]"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div
-                      className={`p-2 rounded-lg shrink-0 ${
-                        item.type === 'file'
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : 'bg-cyan-500/10 text-cyan-400'
-                      }`}
-                    >
-                      {item.type === 'file' ? <File className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+              <div className="space-y-2">
+                {transfers.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between text-xs transition-all hover:bg-white/[0.04]"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div
+                        className={`p-2 rounded-lg shrink-0 ${
+                          item.type === 'file'
+                            ? 'bg-emerald-500/10 text-emerald-400'
+                            : 'bg-cyan-500/10 text-cyan-400'
+                        }`}
+                      >
+                        {item.type === 'file' ? <File className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                      </div>
+                      <div className="text-right min-w-0 flex-1">
+                        <span className="font-semibold text-gray-200 block truncate">{item.name}</span>
+                        <span className="text-[10px] text-gray-400 block truncate">
+                          {item.size > 0 ? `${formatBytes(item.size)} • ` : ''}من {item.sender} إلى {item.receiver}{' '}
+                          • {formatTimestamp(item.timestamp)}
+                        </span>
+                        {/* Live Progress Bar and Speed Stats */}
+                        {item.status === 'in_progress' && (
+                          <div className="space-y-1 mt-1.5">
+                            <div className="flex items-center justify-between text-[10px] text-emerald-400 font-mono">
+                              <span>{item.speedFormatted || 'جارٍ البث...'}</span>
+                              <span>{item.etaFormatted || ''} • {Math.round(item.progress * 100)}%</span>
+                            </div>
+                            <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                              <div
+                                className="bg-emerald-400 h-full rounded-full transition-all duration-300 ease-out"
+                                style={{ width: `${Math.round(item.progress * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right min-w-0 flex-1">
-                      <span className="font-semibold text-gray-200 block truncate">{item.name}</span>
-                      <span className="text-[10px] text-gray-400 block truncate">
-                        {item.size > 0 ? `${formatBytes(item.size)} • ` : ''}من {item.sender} إلى {item.receiver}{' '}
-                        • {formatTimestamp(item.timestamp)}
-                      </span>
-                      {/* Live Progress Bar and Speed Stats */}
+
+                    <div className="flex items-center gap-1.5 shrink-0 mr-3">
+                      {item.path && (
+                        <button
+                          onClick={() => openLocalFile(item.path!)}
+                          title="فتح الملف"
+                          className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors otium-press"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {item.type !== 'file' && (
+                        <button
+                          onClick={() => handleCopyClipboard(item.name)}
+                          title="نسخ مجدداً"
+                          className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors otium-press"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {item.status === 'completed' && (
+                        <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>{item.verified ? 'مؤكد CRC32 ✓' : 'تم بنجاح'}</span>
+                        </div>
+                      )}
+                      {item.status === 'failed' && (
+                        <div className="flex items-center gap-1 text-[11px] text-rose-400 font-semibold bg-rose-500/10 px-2 py-0.5 rounded-lg">
+                          <AlertCircle className="w-3 h-3" />
+                          <span>فشل</span>
+                        </div>
+                      )}
                       {item.status === 'in_progress' && (
-                        <div className="space-y-1 mt-1.5">
-                          <div className="flex items-center justify-between text-[10px] text-emerald-400 font-mono">
-                            <span>{item.speedFormatted || 'جارٍ البث...'}</span>
-                            <span>{item.etaFormatted || ''} • {Math.round(item.progress * 100)}%</span>
-                          </div>
-                          <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                            <div
-                              className="bg-emerald-400 h-full rounded-full transition-all duration-200"
-                              style={{ width: `${Math.round(item.progress * 100)}%` }}
-                            />
-                          </div>
+                        <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-lg">
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <span>{Math.round(item.progress * 100)}%</span>
                         </div>
                       )}
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0 mr-3">
-                    {item.path && (
-                      <button
-                        onClick={() => openLocalFile(item.path!)}
-                        title="فتح الملف"
-                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {item.type !== 'file' && (
-                      <button
-                        onClick={() => handleCopyClipboard(item.name)}
-                        title="نسخ مجدداً"
-                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {item.status === 'completed' && (
-                      <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>{item.verified ? 'مؤكد CRC32 ✓' : 'تم بنجاح'}</span>
-                      </div>
-                    )}
-                    {item.status === 'failed' && (
-                      <div className="flex items-center gap-1 text-[11px] text-rose-400 font-semibold bg-rose-500/10 px-2 py-0.5 rounded-lg">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>فشل</span>
-                      </div>
-                    )}
-                    {item.status === 'in_progress' && (
-                      <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-lg">
-                        <RefreshCw className="w-3 h-3 animate-spin" />
-                        <span>{Math.round(item.progress * 100)}%</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+            </section>
+          </div>
         )}
       </main>
 
@@ -1184,7 +1188,7 @@ export const App: React.FC = () => {
               openDownloadsFolder();
               showToast('info', 'تم فتح مجلد التنزيلات');
             }}
-            className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
+            className="flex items-center gap-1 hover:text-emerald-400 transition-colors otium-press"
           >
             <FolderOpen className="w-3.5 h-3.5" />
             <span>مجلد التنزيلات (Ctrl+D)</span>

@@ -109,7 +109,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       aria-labelledby="settings-dialog-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
     >
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#090d14]/98 border border-white/10 shadow-2xl text-slate-100 overflow-hidden font-tajawal flex flex-col max-h-[85vh]">
+      <div className="relative w-full max-w-lg rounded-2xl bg-[#090d14]/98 border border-white/10 shadow-2xl text-slate-100 overflow-hidden font-tajawal flex flex-col max-h-[85vh] gpu-layer">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02] shrink-0">
           <div className="flex items-center gap-2.5">
@@ -126,7 +126,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             onClick={onClose}
             aria-label="إغلاق الإعدادات"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors otium-press"
           >
             <X className="w-5 h-5" />
           </button>
@@ -186,7 +186,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="button"
                   onClick={() => toggleOption('audioFeedback')}
                   aria-label="تبديل التنبيهات الصوتية"
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
                     settings.audioFeedback ? 'bg-emerald-500' : 'bg-slate-700'
                   }`}
                 >
@@ -222,7 +222,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="button"
                     onClick={handleTestChime}
                     title="تجربة الصوت الآن"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-semibold transition-colors shrink-0"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-semibold transition-colors shrink-0 otium-press"
                   >
                     <Play className="w-3 h-3 fill-current" />
                     <span>اختبار</span>
@@ -254,7 +254,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 onClick={() => toggleOption('autoClipboardSync')}
                 aria-label="تبديل المزامنة التلقائية للحافظة"
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
                   settings.autoClipboardSync ? 'bg-emerald-500' : 'bg-slate-700'
                 }`}
               >
@@ -281,7 +281,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 onClick={() => toggleOption('cleanTrackingLinks')}
                 aria-label="تبديل درع تنظيف الروابط"
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
                   settings.cleanTrackingLinks ? 'bg-emerald-500' : 'bg-slate-700'
                 }`}
               >
@@ -308,7 +308,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 onClick={() => toggleOption('requireFileConfirmation')}
                 aria-label="تبديل طلب التأكيد قبل الاستلام"
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
                   settings.requireFileConfirmation ? 'bg-emerald-500' : 'bg-slate-700'
                 }`}
               >
@@ -335,7 +335,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 onClick={() => toggleOption('blockSensitiveAutoSync')}
                 aria-label="تبديل درع حماية البيانات الحساسة"
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
                   settings.blockSensitiveAutoSync ? 'bg-emerald-500' : 'bg-slate-700'
                 }`}
               >
@@ -363,7 +363,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={handleClearAllHistory}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-colors otium-press"
               >
                 {historyCleared ? (
                   <>
@@ -401,13 +401,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex items-center justify-end gap-3 px-6 py-3.5 border-t border-white/10 bg-white/[0.02] shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+            className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors otium-press"
           >
             إلغاء
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all"
+            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all otium-press"
           >
             {isSaved ? (
               <>

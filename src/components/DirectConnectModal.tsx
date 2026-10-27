@@ -60,7 +60,7 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
       aria-labelledby="direct-connect-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
     >
-      <div className="relative w-full max-w-md rounded-2xl bg-[#090d14]/98 border border-white/10 shadow-2xl text-slate-100 overflow-hidden font-tajawal">
+      <div className="relative w-full max-w-md rounded-2xl bg-[#090d14]/98 border border-white/10 shadow-2xl text-slate-100 overflow-hidden font-tajawal gpu-layer">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02]">
           <div className="flex items-center gap-2.5">
@@ -79,7 +79,7 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
           <button
             onClick={onClose}
             aria-label="إغلاق النافذة"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors otium-press"
           >
             <X className="w-5 h-5" />
           </button>
@@ -127,7 +127,7 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
               <button
                 type="button"
                 onClick={() => setOsType('android')}
-                className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all otium-press ${
                   osType === 'android'
                     ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
                     : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
@@ -139,7 +139,7 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
               <button
                 type="button"
                 onClick={() => setOsType('windows')}
-                className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all otium-press ${
                   osType === 'windows'
                     ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300'
                     : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
@@ -156,13 +156,13 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
         <div className="flex items-center justify-end gap-3 px-6 py-3.5 border-t border-white/10 bg-white/[0.02]">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors otium-press"
           >
             إلغاء
           </button>
           <button
             onClick={handleAdd}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all"
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all otium-press"
           >
             {isSuccess ? (
               <>

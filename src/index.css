@@ -85,3 +85,90 @@
     transform: rotate(360deg);
   }
 }
+
+/* Fluid Physics & Easings for 120fps Smoothness */
+:root {
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.otium-tab-transition {
+  transition: all 240ms var(--ease-smooth);
+}
+
+.otium-press {
+  transition: transform 120ms var(--ease-spring), opacity 120ms ease;
+}
+.otium-press:active {
+  transform: scale(0.96);
+}
+
+.otium-glow-hover {
+  transition: all 220ms var(--ease-smooth);
+}
+.otium-glow-hover:hover {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* GPU Hardware Acceleration layer hints */
+.gpu-layer {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+/* Fluid Content Fade & Slide in Animation */
+@keyframes otium-fade-slide {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-otium-enter {
+  animation: otium-fade-slide 240ms var(--ease-smooth) forwards;
+}
+
+/* Pulsing radar blip glow */
+@keyframes blip-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.animate-blip-pulse {
+  animation: blip-pulse 2s infinite;
+}
+
+/* Shimmer animation for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.02) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
