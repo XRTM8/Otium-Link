@@ -1,0 +1,45 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Otium Link",
+  "version": "0.1.0",
+  "identifier": "com.otium.link",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5175",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Otium Link",
+        "url": "index.html",
+        "width": 540,
+        "height": 780,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self' https://tauri.localhost",
+        "connect-src": "'self' ipc: http://ipc.localhost https://ipc.localhost https://tauri.localhost",
+        "font-src": "'self' data: https://tauri.localhost",
+        "img-src": "'self' data: blob: https://tauri.localhost",
+        "media-src": "'self' blob: data: https://tauri.localhost",
+        "style-src": "'self' 'unsafe-inline'",
+        "script-src": "'self'",
+        "worker-src": "'self' blob:",
+        "object-src": "'none'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "android": {
+      "debugApplicationIdSuffix": ".debug"
+    }
+  }
+}
