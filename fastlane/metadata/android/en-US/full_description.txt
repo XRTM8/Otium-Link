@@ -1,0 +1,9 @@
+Otium Link is a secure, peer-to-peer (P2P) bridge connecting your Windows PC and Android phone over your local network. No cloud relays, no server storage, zero telemetry.
+
+Key Highlights:
+• Instant Live Clipboard Sync: Seamlessly copy text or links on your computer and paste on your phone, or vice-versa.
+• High-Speed File Streaming: Transfer large files directly via raw TCP with automated CRC32 byte integrity verification.
+• Tracking Parameter Stripper: Cleans outgoing URLs of intrusive tracking parameters (fbclid, gclid, utm_*) before syncing.
+• Local Private Firewall: Enforces strict RFC 1918 private subnet IP filtering to block unauthorized remote connections.
+• Direct IP Fallback: Manual IP pairing for environments with router AP Isolation or multicast blocking.
+• Free & Open Source: Licensed under GNU GPL v3.

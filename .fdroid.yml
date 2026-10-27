@@ -1,0 +1,23 @@
+Categories:
+  - Connectivity
+  - Utilities
+License: GPL-3.0-or-later
+AuthorName: XRTM8
+AuthorWebSite: https://github.com/XRTM8
+WebSite: https://xrtm8.github.io/Otium/
+SourceCode: https://github.com/XRTM8/Otium-Link
+IssueTracker: https://github.com/XRTM8/Otium-Link/issues
+Changelog: https://github.com/XRTM8/Otium-Link/releases
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.5.1
+CurrentVersionCode: 10501
+
+Builds:
+  - versionName: 1.5.1
+    versionCode: 10501
+    commit: v1.5.1
+    subdir: src-tauri/gen/android
+    gradle:
+      - assembleRelease

@@ -1,0 +1,1 @@
+Instant cross-device P2P clipboard and file transfer between PC and phone over local Wi-Fi.
