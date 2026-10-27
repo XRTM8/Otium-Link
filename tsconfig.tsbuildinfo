@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/otiumlinklogo.tsx","./src/core/tauribridge.ts","./src/core/types.ts","./src/core/urlcleaner.test.ts","./src/core/urlcleaner.ts","./src/styles/fonts.ts"],"version":"6.0.3"}

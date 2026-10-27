@@ -53,7 +53,7 @@ pub struct FileHeaderPayload {
 pub struct NetworkManager {
     pub self_device: Arc<Mutex<PeerDevice>>,
     pub peers: Arc<Mutex<HashMap<String, PeerDevice>>>,
-    pub downloads_dir: PathBuf,
+    pub downloads_dir: Arc<Mutex<PathBuf>>,
 }
 
 impl NetworkManager {
@@ -92,8 +92,24 @@ impl NetworkManager {
         Self {
             self_device: Arc::new(Mutex::new(self_device)),
             peers: Arc::new(Mutex::new(HashMap::new())),
-            downloads_dir,
+            downloads_dir: Arc::new(Mutex::new(downloads_dir)),
         }
+    }
+
+    pub fn set_device_name(&self, new_name: String) {
+        if let Ok(mut dev) = self.self_device.lock() {
+            dev.name = new_name;
+        }
+    }
+
+    pub fn set_downloads_dir(&self, dir: PathBuf) {
+        if let Ok(mut d) = self.downloads_dir.lock() {
+            *d = dir;
+        }
+    }
+
+    pub fn get_downloads_dir(&self) -> PathBuf {
+        self.downloads_dir.lock().unwrap().clone()
     }
 
     /// Starts local UDP discovery beacon broadcast and receiver
@@ -190,7 +206,9 @@ impl NetworkManager {
     /// Starts TCP Server on port 42425 to receive clipboard syncs and streamed files
     pub fn start_tcp_server(&self, app: AppHandle) {
         let downloads = self.downloads_dir.clone();
-        let _ = fs::create_dir_all(&downloads);
+        if let Ok(dir) = downloads.lock() {
+            let _ = fs::create_dir_all(&*dir);
+        }
 
         thread::spawn(move || {
             let listener = match TcpListener::bind(format!("0.0.0.0:{}", TCP_PORT)) {
@@ -244,7 +262,12 @@ impl NetworkManager {
                                             .map(|n| n.to_string_lossy().to_string())
                                             .unwrap_or_else(|| "downloaded_file.bin".to_string());
 
-                                        let target_path = downloads_clone.join(&safe_name);
+                                        let target_dir = downloads_clone
+                                            .lock()
+                                            .map(|d| d.clone())
+                                            .unwrap_or_else(|_| PathBuf::from("."));
+                                        let _ = fs::create_dir_all(&target_dir);
+                                        let target_path = target_dir.join(&safe_name);
                                         if let Ok(mut file) = File::create(&target_path) {
                                             let mut received_bytes: u64 = 0;
                                             let mut chunk = [0u8; 65536]; // 64KB chunks

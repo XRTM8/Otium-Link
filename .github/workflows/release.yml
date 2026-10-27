@@ -113,7 +113,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -151,10 +151,10 @@ jobs:
               "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" \
               > "$keystore_dir/keystore.properties"
           else
-            echo "::warning ::No ANDROID_KEYSTORE_BASE64 secret provided. Proceeding with unsigned build."
+            echo "::warning ::No ANDROID_KEYSTORE_BASE64 secret provided. Proceeding with unsigned / debug keystore build."
           fi
 
-      - name: Build Android APK
+      - name: Build Android APK (Per-ABI Split for minimal file size)
         shell: bash
         run: |
           set -euo pipefail
@@ -168,7 +168,37 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          find src-tauri/gen/android/app/build/outputs/apk -type f -name "*release*.apk" -exec cp {} release/ \;
+          echo "Searching for generated release APKs..."
+          find src-tauri/gen/android/app/build/outputs/apk -type f -name "*.apk"
+
+          while IFS= read -r apk; do
+            [ -z "$apk" ] && continue
+            name="$(basename "$apk")"
+            dir="$(basename "$(dirname "$(dirname "$apk")")")"
+            abi=""
+            case "$dir" in
+              arm64*) abi="arm64-v8a" ;;
+              arm*) abi="armeabi-v7a" ;;
+              x86_64*) abi="x86_64" ;;
+              x86*) abi="x86" ;;
+              *)
+                case "$name" in
+                  *arm64-v8a*) abi="arm64-v8a" ;;
+                  *armeabi-v7a*) abi="armeabi-v7a" ;;
+                  *x86_64*) abi="x86_64" ;;
+                  *x86*) abi="x86" ;;
+                  *arm64*) abi="arm64-v8a" ;;
+                  *arm*) abi="armeabi-v7a" ;;
+                esac
+                ;;
+            esac
+            if [ -n "$abi" ]; then
+              echo "Packaging $apk as OtiumLink_${VERSION}_${abi}.apk"
+              cp "$apk" "release/OtiumLink_${VERSION}_${abi}.apk"
+            else
+              cp "$apk" "release/OtiumLink_${VERSION}_universal.apk"
+            fi
+          done < <(find src-tauri/gen/android/app/build/outputs/apk -type f -name "*.apk")
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4

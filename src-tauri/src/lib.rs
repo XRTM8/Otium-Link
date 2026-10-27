@@ -1,9 +1,14 @@
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tauri::Manager;
+
+#[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
+#[cfg(desktop)]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Manager, WindowEvent};
+#[cfg(desktop)]
+use tauri::WindowEvent;
 
 mod network;
 use network::{NetworkManager, PeerDevice};
@@ -15,6 +20,12 @@ struct AppState {
 #[tauri::command]
 fn get_self_device(state: tauri::State<'_, AppState>) -> PeerDevice {
     state.network.self_device.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn set_device_name(state: tauri::State<'_, AppState>, name: String) -> Result<(), String> {
+    state.network.set_device_name(name);
+    Ok(())
 }
 
 #[tauri::command]
@@ -34,6 +45,21 @@ fn send_file(state: tauri::State<'_, AppState>, target_ip: String, file_path: St
     state.network.send_file(&target_ip, PathBuf::from(file_path), sender)
 }
 
+#[tauri::command]
+fn get_download_dir(state: tauri::State<'_, AppState>) -> String {
+    state.network.get_downloads_dir().to_string_lossy().to_string()
+}
+
+#[tauri::command]
+fn set_download_dir(state: tauri::State<'_, AppState>, path: String) -> Result<(), String> {
+    let p = PathBuf::from(path);
+    if !p.exists() {
+        std::fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+    }
+    state.network.set_downloads_dir(p);
+    Ok(())
+}
+
 fn resolve_device_name() -> String {
     env::var("COMPUTERNAME")
         .or_else(|_| env::var("HOSTNAME"))
@@ -42,7 +68,8 @@ fn resolve_device_name() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle();
@@ -60,7 +87,7 @@ pub fn run() {
 
             app.manage(AppState { network });
 
-            // Setup System Tray Icon for background operation
+            // Setup System Tray Icon for desktop background operation
             #[cfg(desktop)]
             {
                 let show_i = MenuItem::with_id(app, "show", "إظهار Otium Link", true, None::<&str>)?;
@@ -72,8 +99,7 @@ pub fn run() {
                     let _ = TrayIconBuilder::new()
                         .icon(tray_icon)
                         .menu(&tray_menu)
-                        .show_menu_on_left_click(false)
-                        .tooltip("Otium Link — الجسر اللحظي")
+                        .tooltip("Otium Link — المزامنة اللحظية الحرة")
                         .on_menu_event(|app, event| {
                             match event.id.as_ref() {
                                 "show" => {
@@ -107,19 +133,28 @@ pub fn run() {
             }
 
             Ok(())
-        })
-        .on_window_event(|window, event| {
+        });
+
+    #[cfg(desktop)]
+    {
+        builder = builder.on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // Minimize to system tray instead of closing process
                 let _ = window.hide();
                 api.prevent_close();
             }
-        })
+        });
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![
             get_self_device,
+            set_device_name,
             get_peers,
             send_clipboard,
-            send_file
+            send_file,
+            get_download_dir,
+            set_download_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running otium link");

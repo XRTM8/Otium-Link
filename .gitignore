@@ -9,3 +9,4 @@ src-tauri/gen/android/.gradle
 *.jks
 keystore.properties
 *.log
+*.tsbuildinfo

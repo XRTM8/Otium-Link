@@ -20,11 +20,18 @@ export async function fetchSelfDevice(): Promise<Device | null> {
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const raw = await invoke<any>('get_self_device');
+    const raw = await invoke<{
+      id: string;
+      name: string;
+      os: string;
+      ip: string;
+      port: number;
+      last_seen: number;
+    }>('get_self_device');
     return {
       id: raw.id,
       name: raw.name,
-      os: raw.os,
+      os: raw.os as Device['os'],
       ip: raw.ip,
       port: raw.port,
       lastSeen: raw.last_seen,
@@ -37,6 +44,40 @@ export async function fetchSelfDevice(): Promise<Device | null> {
   }
 }
 
+export async function updateDeviceName(name: string): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_device_name', { name });
+    return true;
+  } catch (err) {
+    console.error('Failed to set device name:', err);
+    return false;
+  }
+}
+
+export async function fetchDownloadDir(): Promise<string> {
+  if (!isTauriEnvironment()) return 'Downloads/OtiumLink';
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<string>('get_download_dir');
+  } catch {
+    return '';
+  }
+}
+
+export async function updateDownloadDir(path: string): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_download_dir', { path });
+    return true;
+  } catch (err) {
+    console.error('Failed to set download dir:', err);
+    return false;
+  }
+}
+
 export async function fetchDiscoveredPeers(): Promise<Device[]> {
   if (!isTauriEnvironment()) {
     return [];
@@ -44,11 +85,18 @@ export async function fetchDiscoveredPeers(): Promise<Device[]> {
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const rawList = await invoke<any[]>('get_peers');
+    const rawList = await invoke<Array<{
+      id: string;
+      name: string;
+      os: string;
+      ip: string;
+      port: number;
+      last_seen: number;
+    }>>('get_peers');
     return rawList.map((p) => ({
       id: p.id,
       name: p.name,
-      os: p.os,
+      os: p.os as Device['os'],
       ip: p.ip,
       port: p.port,
       lastSeen: p.last_seen,
@@ -103,12 +151,19 @@ export async function setupNativeListeners(
   try {
     const { listen } = await import('@tauri-apps/api/event');
 
-    const unlistenPeer = await listen<any>('otium-link://peer-discovered', (event) => {
+    const unlistenPeer = await listen<{
+      id: string;
+      name: string;
+      os: string;
+      ip: string;
+      port: number;
+      last_seen: number;
+    }>('otium-link://peer-discovered', (event) => {
       const p = event.payload;
       onPeerDiscovered({
         id: p.id,
         name: p.name,
-        os: p.os,
+        os: p.os as Device['os'],
         ip: p.ip,
         port: p.port,
         lastSeen: p.last_seen,
@@ -117,13 +172,19 @@ export async function setupNativeListeners(
       });
     });
 
-    const unlistenClip = await listen<any>('otium-link://clipboard-received', (event) => {
-      onClipboardReceived(event.payload);
-    });
+    const unlistenClip = await listen<{ text: string; sender: string; timestamp: number }>(
+      'otium-link://clipboard-received',
+      (event) => {
+        onClipboardReceived(event.payload);
+      }
+    );
 
-    const unlistenFile = await listen<any>('otium-link://file-received', (event) => {
-      onFileReceived(event.payload);
-    });
+    const unlistenFile = await listen<{ name: string; path: string; size: number; sender: string }>(
+      'otium-link://file-received',
+      (event) => {
+        onFileReceived(event.payload);
+      }
+    );
 
     return () => {
       unlistenPeer();
