@@ -3,7 +3,7 @@
 > **Local-First Universal Bridge for Instant Clipboard and File Sync Between PC and Phone**  
 > *جسر محلي فوري لنقل الحافظة والملفات بين الحاسوب والهاتف دون إنترنت وبخصوصية مطلقة.*
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Built with Tauri v2](https://img.shields.io/badge/Built%20with-Tauri%20v2-24c8db.svg)](https://v2.tauri.app/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-1.80+-orange.svg)](https://www.rust-lang.org/)
@@ -68,4 +68,5 @@ npm run tauri:build
 ---
 
 ## 📄 الترخيص (License)
-مرخص تحت رخصة [MIT License](LICENSE) المفتوحة والمجانية بالكامل.
+
+هذا المشروع حر ومفتوح المصدر بالكامل تحت رخصة **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)** لحماية حرية المستخدم وضمان بقاء الشيفرة البرمجية حرة ومتاحة للجميع دائماً.
