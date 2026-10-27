@@ -650,7 +650,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.5.0 منقّح بالكامل
+                v1.5.1 نظام التحديثات
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>

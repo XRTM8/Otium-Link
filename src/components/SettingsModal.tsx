@@ -12,10 +12,17 @@ import {
   Play,
   FileCheck2,
   Info,
+  RefreshCw,
+  Sparkles,
+  ExternalLink,
+  Download,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { AppSettings, loadSettings, saveSettings } from '../core/settings';
-import { updateDeviceName, updateDownloadDir, fetchDownloadDir } from '../core/tauriBridge';
+import { updateDeviceName, updateDownloadDir, fetchDownloadDir, openExternalUrl } from '../core/tauriBridge';
 import { playReceiveChime } from '../core/audioFeedback';
+import { checkForAppUpdates, UpdateCheckResult, APP_CURRENT_VERSION } from '../core/updater';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -37,6 +44,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [downloadPathInput, setDownloadPathInput] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [historyCleared, setHistoryCleared] = useState(false);
+
+  // Update Checker State (Otium 3-Tier Failover System)
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const handleCheckUpdate = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateError(null);
+    try {
+      const res = await checkForAppUpdates();
+      setUpdateResult(res);
+    } catch (err: any) {
+      setUpdateError(err.message || 'تعذر الاتصال بخوادم التحديثات. يرجى التحقق من اتصالك بالإنترنت.');
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -380,7 +405,122 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Section 5: Protocol & Legal */}
+          {/* Section 5: App Updates (Otium Ecosystem 3-Tier Failover Updater) */}
+          <div className="space-y-3 pt-3 border-t border-white/10">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold">
+                الإصدار الحالي: v{APP_CURRENT_VERSION}
+              </span>
+              <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>تحديثات التطبيق (منظومة Otium)</span>
+              </h3>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+              <div className="text-right">
+                <span className="text-xs font-semibold text-white block">نظام التحديثات المباشر عند الطلب</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5 leading-relaxed">
+                  فحص آمن 100% بدون أي تتبع في الخلفية عبر نظام الاستكشاف الثلاثي المقاوم لحجب الـ API
+                </span>
+              </div>
+
+              {!isCheckingUpdate && !updateResult && !updateError && (
+                <button
+                  type="button"
+                  onClick={handleCheckUpdate}
+                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all otium-press"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>التحقق من وجود تحديثات الآن</span>
+                </button>
+              )}
+
+              {isCheckingUpdate && (
+                <div className="text-center py-3 space-y-2 bg-black/30 rounded-xl border border-white/[0.05]">
+                  <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin mx-auto" />
+                  <p className="text-xs text-slate-300 font-medium">جارٍ فحص خوادم التحديثات (GitHub Releases)...</p>
+                </div>
+              )}
+
+              {updateError && (
+                <div className="space-y-2.5">
+                  <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <span>{updateError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCheckUpdate}
+                    className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1.5 border border-white/10 transition-colors otium-press"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>إعادة المحاولة</span>
+                  </button>
+                </div>
+              )}
+
+              {updateResult && updateResult.hasUpdate && (
+                <div className="space-y-3 p-3 bg-emerald-950/30 border border-emerald-500/35 rounded-xl text-right">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {updateResult.publishedAt ? new Date(updateResult.publishedAt).toLocaleDateString('ar-EG') : ''}
+                    </span>
+                    <div className="flex items-center gap-1.5 text-emerald-300 font-bold text-xs">
+                      <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      <span>يتوفر إصدار جديد: v{updateResult.latestVersion}</span>
+                    </div>
+                  </div>
+
+                  {updateResult.releaseNotes && (
+                    <div className="max-h-24 overflow-y-auto p-2 bg-black/40 rounded-lg text-[11px] text-slate-300 font-mono dir-ltr text-left border border-white/5 whitespace-pre-wrap">
+                      {updateResult.releaseNotes}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    {updateResult.matchedAsset && (
+                      <button
+                        type="button"
+                        onClick={() => openExternalUrl(updateResult.matchedAsset!.downloadUrl)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all otium-press"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>تحميل التحديث ({updateResult.matchedAsset.name})</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openExternalUrl(updateResult.releaseUrl)}
+                      className="flex-1 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center justify-center gap-1.5 border border-white/10 transition-all otium-press"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>عرض في GitHub</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {updateResult && !updateResult.hasUpdate && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={handleCheckUpdate}
+                    className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/20 transition-colors otium-press"
+                    title="إعادة الفحص"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span>أنت تستخدم أحدث إصدار متاح حالياً (v{APP_CURRENT_VERSION})</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 6: Protocol & Legal */}
           <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-xs text-slate-300 space-y-1.5">
             <div className="flex items-center gap-2 font-semibold text-emerald-400">
               <HardDrive className="w-4 h-4" />

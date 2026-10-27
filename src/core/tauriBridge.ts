@@ -349,3 +349,18 @@ export async function setupNativeListeners(config: NativeListenersConfig): Promi
     return () => {};
   }
 }
+
+export async function openExternalUrl(url: string): Promise<boolean> {
+  if (!url) return false;
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener');
+    await openUrl(url);
+    return true;
+  } catch {
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return true;
+    }
+    return false;
+  }
+}
