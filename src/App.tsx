@@ -650,7 +650,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.5.1 نظام التحديثات
+                v1.6.0 الأوفرهول الشامل
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
@@ -1180,6 +1180,14 @@ export const App: React.FC = () => {
                   <span>سجل النقل اللحظي والملفات المتبادلة</span>
                 </span>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openDownloadsFolder()}
+                    title="فتح مجلد التنزيلات"
+                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-emerald-400 hover:text-emerald-300 transition-colors text-[11px] font-semibold flex items-center gap-1.5 otium-press"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>مجلد التنزيلات</span>
+                  </button>
                   <span className="text-[10px] text-gray-400 font-mono">{transfers.length} عناصر</span>
                   <button
                     onClick={handleClearHistory}
@@ -1234,13 +1242,22 @@ export const App: React.FC = () => {
 
                     <div className="flex items-center gap-1.5 shrink-0 mr-3">
                       {item.path && (
-                        <button
-                          onClick={() => openLocalFile(item.path!)}
-                          title="فتح الملف"
-                          className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors otium-press"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openLocalFile(item.path!)}
+                            title="فتح الملف مباشرة"
+                            className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors otium-press"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => openDownloadsFolder()}
+                            title="كشف في مجلد التنزيلات"
+                            className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-emerald-400 hover:text-emerald-300 transition-colors otium-press"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5" />
+                          </button>
+                        </>
                       )}
                       {item.type !== 'file' && (
                         <button
@@ -1316,6 +1333,7 @@ export const App: React.FC = () => {
         isOpen={isDirectConnectOpen}
         onClose={() => setIsDirectConnectOpen(false)}
         onAddDirectPeer={handleDirectPeerAdded}
+        selfDevice={devices.find((d) => d.isSelf)}
       />
     </div>
   );

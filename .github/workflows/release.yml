@@ -147,19 +147,24 @@ jobs:
           mkdir -p "$keystore_dir"
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_dir/release.jks"
-            printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
-              "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" \
-              > "$keystore_dir/keystore.properties"
+            cat > "$keystore_dir/keystore.properties" <<EOF
+storeFile=release.jks
+storePassword=$ANDROID_KEYSTORE_PASSWORD
+keyAlias=$ANDROID_KEY_ALIAS
+keyPassword=$ANDROID_KEY_PASSWORD
+EOF
           else
-            echo "::warning ::No ANDROID_KEYSTORE_BASE64 secret provided. Proceeding with unsigned / debug keystore build."
+            echo "ERROR: Missing ANDROID_KEYSTORE_BASE64 secret. Release APK must be signed."
+            exit 1
           fi
 
-      - name: Build Android APK (Per-ABI Split for minimal file size)
+      - name: Build signed APKs (Per-ABI Split and Universal)
         shell: bash
         run: |
           set -euo pipefail
           npm run build
           npx tauri android build --apk --split-per-abi
+          npx tauri android build --apk
 
       - name: Package Release Assets
         shell: bash
@@ -169,36 +174,37 @@ jobs:
           set -euo pipefail
           mkdir -p release
           echo "Searching for generated release APKs..."
-          find src-tauri/gen/android/app/build/outputs/apk -type f -name "*.apk"
-
+          found=0
           while IFS= read -r apk; do
             [ -z "$apk" ] && continue
             name="$(basename "$apk")"
             dir="$(basename "$(dirname "$(dirname "$apk")")")"
-            abi=""
             case "$dir" in
               arm64*) abi="arm64-v8a" ;;
               arm*) abi="armeabi-v7a" ;;
               x86_64*) abi="x86_64" ;;
               x86*) abi="x86" ;;
+              universal*) abi="universal" ;;
               *)
                 case "$name" in
                   *arm64-v8a*) abi="arm64-v8a" ;;
                   *armeabi-v7a*) abi="armeabi-v7a" ;;
                   *x86_64*) abi="x86_64" ;;
                   *x86*) abi="x86" ;;
-                  *arm64*) abi="arm64-v8a" ;;
-                  *arm*) abi="armeabi-v7a" ;;
+                  *universal*) abi="universal" ;;
+                  *) echo "Skipping unrecognised APK: $apk"; continue ;;
                 esac
                 ;;
             esac
-            if [ -n "$abi" ]; then
-              echo "Packaging $apk as OtiumLink_${VERSION}_${abi}.apk"
-              cp "$apk" "release/OtiumLink_${VERSION}_${abi}.apk"
-            else
-              cp "$apk" "release/OtiumLink_${VERSION}_universal.apk"
-            fi
-          done < <(find src-tauri/gen/android/app/build/outputs/apk -type f -name "*.apk")
+            echo "Packaging $apk as OtiumLink_${VERSION}_${abi}.apk"
+            cp "$apk" "release/OtiumLink_${VERSION}_${abi}.apk"
+            found=$((found + 1))
+          done < <(find src-tauri/gen/android/app/build/outputs/apk -path '*/release/*.apk' -print)
+          if [ "$found" -eq 0 ]; then
+            echo 'No release APKs were produced.'
+            exit 1
+          fi
+          ls -lh release/*.apk
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
@@ -225,12 +231,40 @@ jobs:
           name: release-android
           path: release
 
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          cd ..
+
+      - name: Create release notes
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          TAG: ${{ needs.verify.outputs.tag }}
+        run: |
+          cat > release-notes.md << 'EOF'
+          # Otium Link v${{ needs.verify.outputs.version }} ⚡📱💻
+
+          Official production release of Otium Link — The sovereign, local-first universal bridge between desktop and mobile.
+
+          ### Overhaul Highlights (v1.6.0)
+          - **Signed & Verified Android Distributables:** Fully signed with official Otium keystore (v1, v2, v3 schemes) ensuring seamless installation on all Android devices with zero parse/security errors.
+          - **Universal & Split APK Distribution:** Provides both optimized per-ABI APKs (`arm64-v8a`, `armeabi-v7a`, `x86_64`) and a guaranteed `universal.apk` for all devices.
+          - **Native Destination Exploration:** Instant "Show in Folder" (`FolderOpen`) action on transfer cards to reveal received files directly in Windows Explorer.
+          - **Direct Pairing & Self-IP Hub:** Dedicated connection card displaying local IP and port for frictionless manual connect across AP-isolated networks.
+          - **Strict Offline Sovereignty:** Zero cloud telemetry, zero proxy servers, pure P2P LAN encryption and streaming.
+          - **GPL-3.0 Licensed:** Free open-source software forever.
+          EOF
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.verify.outputs.tag }}
-          name: Otium Link ${{ needs.verify.outputs.version }}
-          body: "Official release ${{ needs.verify.outputs.tag }} of Otium Link — Local-first Universal Bridge."
+          name: Otium Link v${{ needs.verify.outputs.version }}
+          body_path: release-notes.md
           files: release/*
           draft: false
           prerelease: false

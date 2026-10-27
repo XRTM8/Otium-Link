@@ -11,13 +11,13 @@ Changelog: https://github.com/XRTM8/Otium-Link/releases
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.5.1
-CurrentVersionCode: 10501
+CurrentVersion: 1.6.0
+CurrentVersionCode: 10600
 
 Builds:
-  - versionName: 1.5.1
-    versionCode: 10501
-    commit: v1.5.1
+  - versionName: 1.6.0
+    versionCode: 10600
+    commit: v1.6.0
     subdir: src-tauri/gen/android
     gradle:
       - assembleRelease
