@@ -1,7 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  Laptop,
-  Smartphone,
   Copy,
   Check,
   UploadCloud,
@@ -25,13 +23,24 @@ import {
   Link,
   File,
   Send,
+  Zap,
 } from 'lucide-react';
 import { OtiumLinkLogo } from './components/OtiumLinkLogo';
 import { SettingsModal } from './components/SettingsModal';
+import { DirectConnectModal } from './components/DirectConnectModal';
+import { RadarVisualizer } from './components/RadarVisualizer';
+import { ToastContainer, ToastMessage } from './components/Toast';
 import { Device, TransferItem } from './core/types';
 import { cleanUrl, formatBytes } from './core/urlCleaner';
 import { loadSettings, saveSettings, AppSettings } from './core/settings';
-import { playReceiveChime, playSendChime } from './core/audioFeedback';
+import {
+  playReceiveChime,
+  playSendChime,
+  playSuccessChime,
+  playWarningChime,
+  playDropChime,
+  playDeleteChime,
+} from './core/audioFeedback';
 import {
   HistoryItem,
   ClipboardContentType,
@@ -40,6 +49,7 @@ import {
   removeClipboardHistoryItem,
   clearClipboardHistory,
 } from './core/clipboardHistory';
+import { recordTransferProgress, clearTransferTracker } from './core/transferSpeed';
 import {
   fetchDiscoveredPeers,
   fetchSelfDevice,
@@ -71,6 +81,26 @@ export const App: React.FC = () => {
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>(loadSettings());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDirectConnectOpen, setIsDirectConnectOpen] = useState(false);
+
+  // Floating Toasts
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const showToast = useCallback(
+    (type: 'success' | 'info' | 'warning', title: string, description?: string) => {
+      const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      setToasts((prev) => [...prev, { id, type, title, description }]);
+      if (type === 'warning') {
+        playWarningChime(appSettings.audioFeedback, appSettings.soundVolume);
+      } else if (type === 'success') {
+        playSuccessChime(appSettings.audioFeedback, appSettings.soundVolume);
+      }
+    },
+    [appSettings.audioFeedback, appSettings.soundVolume]
+  );
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const [clipboardText, setClipboardText] = useState(
     'https://youtu.be/dQw4w9WgXcQ?si=f50sX9e821&utm_source=share'
@@ -78,13 +108,13 @@ export const App: React.FC = () => {
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const lastAutoSyncedRef = useRef<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Clipboard History Vault State
   const [clipboardHistory, setClipboardHistory] = useState<HistoryItem[]>([]);
   const [clipboardFilter, setClipboardFilter] = useState<'all' | ClipboardContentType>('all');
   const [clipboardSearch, setClipboardSearch] = useState('');
   const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
-  const [peerNotice, setPeerNotice] = useState<string | null>(null);
 
   // Transfer history
   const [transfers, setTransfers] = useState<TransferItem[]>([
@@ -135,16 +165,19 @@ export const App: React.FC = () => {
       const targetPeer = devices.find((d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId));
       if (!targetPeer) {
         if (!isAutomated) {
-          setPeerNotice('لا يوجد جهاز مقترن حالياً لنقل الحافظة إليه. شغّل Otium Link على الجهاز الآخر.');
-          setTimeout(() => setPeerNotice(null), 3500);
+          showToast(
+            'warning',
+            'لا يوجد جهاز مقترن حالياً',
+            'شغّل Otium Link على هاتفك أو حاسوبك الآخر على نفس شبكة Wi-Fi أولاً'
+          );
         }
         return;
       }
       const targetIp = targetPeer.ip;
 
-      const { cleanedUrl, wasCleaned } = appSettings.cleanTrackingLinks
+      const { cleanedUrl, wasCleaned, strippedParams } = appSettings.cleanTrackingLinks
         ? cleanUrl(trimmed)
-        : { cleanedUrl: trimmed, wasCleaned: false };
+        : { cleanedUrl: trimmed, wasCleaned: false, strippedParams: [] };
 
       // Record to history vault
       addClipboardHistoryItem(cleanedUrl, wasCleaned);
@@ -160,7 +193,7 @@ export const App: React.FC = () => {
         progress: 1,
         status: 'completed',
         sender: 'هذا الجهاز',
-        receiver: targetPeer?.name || 'الجهاز المقترن',
+        receiver: targetPeer.name,
         timestamp: Date.now(),
         verified: true,
       };
@@ -169,9 +202,14 @@ export const App: React.FC = () => {
       if (!isAutomated) {
         setCopiedSuccess(true);
         setTimeout(() => setCopiedSuccess(false), 2000);
+        showToast(
+          'success',
+          'تم إرسال النص للجهاز بنجاح',
+          wasCleaned ? `تم تطهير ${strippedParams.length} بارامترات تتبع` : `إلى ${targetPeer.name}`
+        );
       }
     },
-    [appSettings.audioFeedback, appSettings.cleanTrackingLinks, appSettings.soundVolume, devices, selectedPeerId]
+    [appSettings.audioFeedback, appSettings.cleanTrackingLinks, appSettings.soundVolume, devices, selectedPeerId, showToast]
   );
 
   // Load initial devices and setup Tauri event listeners
@@ -212,6 +250,7 @@ export const App: React.FC = () => {
           return [...prev, newPeer];
         });
         setSelectedPeerId((prev) => prev || newPeer.id);
+        showToast('info', 'تم اكتشاف جهاز جديد', `${newPeer.name} (${newPeer.ip})`);
       },
       onPeersUpdated: (freshPeers) => {
         setDevices((prev) => {
@@ -229,6 +268,7 @@ export const App: React.FC = () => {
         if (typeof navigator !== 'undefined' && navigator.clipboard) {
           navigator.clipboard.writeText(clip.text).catch(() => {});
         }
+        showToast('success', 'تم استلام نص للحافظة', `من ${clip.sender}`);
         setTransfers((prev) => [
           {
             id: `tx_${Date.now()}`,
@@ -260,7 +300,9 @@ export const App: React.FC = () => {
         }
       },
       onFileReceived: (file) => {
+        clearTransferTracker(file.name);
         playReceiveChime(appSettings.audioFeedback, appSettings.soundVolume);
+        showToast('success', 'تم استلام الملف بنجاح ✓', `${file.name} (${formatBytes(file.size)})`);
         setTransfers((prev) => [
           {
             id: `tx_${Date.now()}`,
@@ -279,6 +321,7 @@ export const App: React.FC = () => {
         ]);
       },
       onFileProgress: (prog) => {
+        const stats = recordTransferProgress(prog.name, prog.transferred, prog.total);
         setTransfers((prev) => {
           const existing = prev.find((t) => t.name === prog.name && t.status === 'in_progress');
           const progressRatio = prog.total > 0 ? prog.transferred / prog.total : 0.5;
@@ -288,6 +331,9 @@ export const App: React.FC = () => {
                 ? {
                     ...t,
                     progress: progressRatio,
+                    speedBytesPerSec: stats.speedBytesPerSec,
+                    speedFormatted: stats.formattedSpeed,
+                    etaFormatted: stats.formattedEta,
                     status: progressRatio >= 1 ? 'completed' : 'in_progress',
                   }
                 : t
@@ -300,6 +346,9 @@ export const App: React.FC = () => {
                 size: prog.total,
                 type: 'file',
                 progress: progressRatio,
+                speedBytesPerSec: stats.speedBytesPerSec,
+                speedFormatted: stats.formattedSpeed,
+                etaFormatted: stats.formattedEta,
                 status: 'in_progress',
                 sender: prog.sender,
                 receiver: 'هذا الجهاز',
@@ -312,6 +361,8 @@ export const App: React.FC = () => {
         });
       },
       onFileError: (err) => {
+        clearTransferTracker(err.name);
+        showToast('warning', 'تعذر استلام الملف', `${err.name}: ${err.error}`);
         setTransfers((prev) => [
           {
             id: `tx_err_${Date.now()}`,
@@ -343,7 +394,37 @@ export const App: React.FC = () => {
     appSettings.deviceName,
     appSettings.soundVolume,
     handleTransmitClipboardText,
+    showToast,
   ]);
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl + Enter: transmit clipboard
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        handleTransmitClipboardText(clipboardText, false);
+      }
+      // Ctrl + O: trigger file picker
+      if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault();
+        fileInputRef.current?.click();
+      }
+      // Ctrl + D: open downloads folder
+      if (e.ctrlKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        openDownloadsFolder();
+        showToast('info', 'تم فتح مجلد التنزيلات', 'Downloads/OtiumLink');
+      }
+      // Escape: close modal
+      if (e.key === 'Escape') {
+        setIsSettingsOpen(false);
+        setIsDirectConnectOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [clipboardText, handleTransmitClipboardText, showToast]);
 
   const handleCopyClipboard = (textOverride?: string, historyId?: string) => {
     const raw = textOverride || clipboardText;
@@ -358,10 +439,12 @@ export const App: React.FC = () => {
         setCopiedSuccess(true);
         setTimeout(() => setCopiedSuccess(false), 1800);
       }
+      showToast('success', 'تم النسخ إلى الحافظة');
     }
   };
 
   const handleClearHistory = () => {
+    playDeleteChime(appSettings.audioFeedback, appSettings.soundVolume);
     setTransfers([
       {
         id: 'tx_init',
@@ -377,6 +460,17 @@ export const App: React.FC = () => {
       },
     ]);
     clearClipboardHistory();
+    showToast('info', 'تم تفريغ السجل بالكامل');
+  };
+
+  const handleDirectPeerAdded = (newPeer: Device) => {
+    setDevices((prev) => {
+      const exists = prev.some((d) => d.id === newPeer.id || d.ip === newPeer.ip);
+      if (exists) return prev.map((d) => (d.ip === newPeer.ip ? newPeer : d));
+      return [...prev, newPeer];
+    });
+    setSelectedPeerId(newPeer.id);
+    showToast('success', 'تم الاقتران المباشر بنجاح', `${newPeer.name} (${newPeer.ip})`);
   };
 
   const activePeers = devices.filter((d) => !d.isSelf);
@@ -391,7 +485,81 @@ export const App: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[#07090e] text-[#f0f6fc] select-none overflow-hidden font-tajawal">
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragging(true);
+      }}
+      className="flex flex-col h-screen w-full bg-[#07090e] text-[#f0f6fc] select-none overflow-hidden font-tajawal relative"
+    >
+      {/* Toast Notification Layer */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Full Window Drag Overlay */}
+      {isDragging && (
+        <div
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+          }}
+          onDrop={async (e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            playDropChime(appSettings.audioFeedback, appSettings.soundVolume);
+
+            const droppedFiles = Array.from(e.dataTransfer.files);
+            if (droppedFiles.length > 0) {
+              const targetPeer = devices.find(
+                (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
+              );
+              if (!targetPeer) {
+                showToast(
+                  'warning',
+                  'لا يوجد جهاز مقترن حالياً',
+                  'شغّل التطبيق على الجهاز الآخر أولاً لنقل الملفات'
+                );
+                return;
+              }
+
+              for (const f of droppedFiles) {
+                const filePath = (f as any).path || f.name;
+                await transmitFile(targetPeer.ip, filePath);
+                playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+              }
+
+              const newItems: TransferItem[] = droppedFiles.map((f) => ({
+                id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                name: f.name,
+                size: f.size,
+                type: 'file',
+                progress: 1,
+                status: 'completed',
+                sender: 'هذا الجهاز',
+                receiver: targetPeer.name,
+                timestamp: Date.now(),
+                verified: true,
+              }));
+              setTransfers((prev) => [...newItems, ...prev]);
+              showToast('success', `جارٍ إرسال ${droppedFiles.length} ملفات`, `إلى ${targetPeer.name}`);
+            }
+          }}
+          className="fixed inset-0 z-50 bg-[#07090e]/92 backdrop-blur-md flex flex-col items-center justify-center border-4 border-dashed border-emerald-400 p-6 animate-in fade-in duration-150"
+        >
+          <div className="p-5 rounded-3xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 mb-3 animate-bounce">
+            <UploadCloud className="w-12 h-12" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-1">أفلت الملفات للإرسال اللحظي المباشر</h2>
+          <p className="text-sm text-emerald-300">
+            {activePeers.length > 0
+              ? `المستهدف: ${devices.find((d) => d.id === selectedPeerId)?.name || activePeers[0].name}`
+              : 'يرجى تشغيل التطبيق على الجهاز المقترن'}
+          </p>
+          <span className="text-xs text-gray-400 mt-2 font-mono">
+            نقل مباشر عالي السرعة مع التحقق التلقائي بنظام CRC32
+          </span>
+        </div>
+      )}
+
       {/* Top Header Bar */}
       <header className="otium-chrome px-4 py-3 flex items-center justify-between border-b border-white/[0.08] z-20 shrink-0">
         <div className="flex items-center gap-3">
@@ -400,7 +568,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.0.1 المستقر
+                v1.1.0 المصقول
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
@@ -412,7 +580,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs">
             <Wifi className={`w-3.5 h-3.5 ${activePeers.length > 0 ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
             <span className="text-gray-300 font-medium">
-              {activePeers.length > 0 ? `${activePeers.length} أجهزة متصلة` : 'الواي فاي المحلي جاهز'}
+              {activePeers.length > 0 ? `${activePeers.length} أجهزة متصلة` : 'الواي فاي جاهز'}
             </span>
           </div>
 
@@ -423,6 +591,7 @@ export const App: React.FC = () => {
                 const self = prev.find((d) => d.isSelf);
                 return self ? [self, ...peers] : peers;
               });
+              showToast('info', 'تم تحديث قائمة الأجهزة المتصلة');
             }}
             title="تحديث واستكشاف الأجهزة"
             className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.08] transition-colors"
@@ -491,83 +660,21 @@ export const App: React.FC = () => {
 
       {/* Main Workspace */}
       <main className="flex-1 overflow-y-auto p-4 space-y-4">
-        {peerNotice && (
-          <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2 animate-in fade-in duration-150">
-            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
-            <span>{peerNotice}</span>
-          </div>
-        )}
-
         {/* ========================================================= */}
         {/* TAB 1: LIVE RADAR & HUB */}
         {/* ========================================================= */}
         {activeTab === 'live' && (
           <>
-            {/* Device Pairing Radar */}
-            <section className="otium-card rounded-2xl p-4 border border-white/[0.08]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-gray-200">
-                  <ArrowRightLeft className="w-4 h-4 text-emerald-400" />
-                  <span>الأجهزة المقترنة على الشبكة المحلية (P2P Mesh)</span>
-                </div>
-                <span className="text-[11px] text-gray-400">
-                  {devices.length} أجهزة متصلة (تشفير محلي مباشر 100%)
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {devices.map((device) => {
-                  const isSelected = !device.isSelf && device.id === selectedPeerId;
-                  return (
-                    <div
-                      key={device.id}
-                      onClick={() => !device.isSelf && setSelectedPeerId(device.id)}
-                      className={`p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
-                        device.isSelf
-                          ? 'bg-white/[0.03] border-white/[0.08] cursor-default'
-                          : isSelected
-                          ? 'bg-emerald-500/10 border-emerald-500/50 shadow-lg shadow-emerald-500/5'
-                          : 'bg-emerald-500/[0.04] border-emerald-500/20 hover:border-emerald-500/40'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`p-2.5 rounded-xl ${
-                            device.os === 'windows'
-                              ? 'bg-cyan-500/10 text-cyan-400'
-                              : 'bg-emerald-500/10 text-emerald-400'
-                          }`}
-                        >
-                          {device.os === 'windows' ? (
-                            <Laptop className="w-5 h-5" />
-                          ) : (
-                            <Smartphone className="w-5 h-5" />
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs font-bold text-white block">{device.name}</span>
-                          <span className="text-[10px] text-gray-400 font-mono">{device.ip}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        <span>{device.isSelf ? 'جهازك الحالي' : isSelected ? 'المستهدف ✓' : 'متصل'}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {activePeers.length === 0 && (
-                <div className="mt-3 p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-xs text-gray-400 flex items-center justify-center gap-2">
-                  <Radio className="w-4 h-4 text-emerald-400 animate-pulse shrink-0" />
-                  <span>
-                    جارٍ الاستكشاف التلقائي عبر المنفذ 42424... افتح Otium Link على هاتفك أو حاسوبك الآخر على نفس شبكة Wi-Fi
-                  </span>
-                </div>
-              )}
-            </section>
+            {/* Visual Radar Scanner */}
+            <RadarVisualizer
+              devices={devices}
+              selectedPeerId={selectedPeerId}
+              onSelectPeer={(id) => {
+                setSelectedPeerId(id);
+                playDropChime(appSettings.audioFeedback, appSettings.soundVolume);
+              }}
+              onOpenDirectConnect={() => setIsDirectConnectOpen(true)}
+            />
 
             {/* Live Universal Clipboard Section */}
             <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
@@ -587,6 +694,10 @@ export const App: React.FC = () => {
                       };
                       setAppSettings(updated);
                       saveSettings(updated);
+                      showToast(
+                        'info',
+                        updated.cleanTrackingLinks ? 'تم تفعيل درع الخصوصية' : 'تم تعطيل درع الخصوصية'
+                      );
                     }}
                     className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold flex items-center gap-1 transition-colors ${
                       appSettings.cleanTrackingLinks
@@ -607,6 +718,10 @@ export const App: React.FC = () => {
                       };
                       setAppSettings(updated);
                       saveSettings(updated);
+                      showToast(
+                        'info',
+                        updated.autoClipboardSync ? 'تم تفعيل المزامنة التلقائية' : 'تم إيقاف المزامنة التلقائية'
+                      );
                     }}
                     className={`text-[11px] px-2.5 py-1 rounded-lg border font-bold flex items-center gap-1 transition-colors ${
                       appSettings.autoClipboardSync
@@ -614,6 +729,7 @@ export const App: React.FC = () => {
                         : 'bg-white/[0.06] text-gray-400 border-white/[0.08]'
                     }`}
                   >
+                    <Zap className="w-3 h-3" />
                     <span>{appSettings.autoClipboardSync ? 'المزامنة نشطة' : 'المزامنة متوقفة'}</span>
                   </button>
                 </div>
@@ -658,7 +774,7 @@ export const App: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleTransmitClipboardText(clipboardText, false)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>إرسال للجهاز المقترن فوراً</span>
@@ -670,52 +786,8 @@ export const App: React.FC = () => {
 
             {/* High Speed File Drop Area */}
             <section
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={async (e) => {
-                e.preventDefault();
-                setIsDragging(false);
-                const droppedFiles = Array.from(e.dataTransfer.files);
-                if (droppedFiles.length > 0) {
-                  const targetPeer = devices.find(
-                    (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
-                  );
-                  if (!targetPeer) {
-                    setPeerNotice('لا يوجد جهاز مقترن حالياً لنقل الملفات إليه. شغّل Otium Link على الجهاز الآخر أولاً.');
-                    setTimeout(() => setPeerNotice(null), 3500);
-                    return;
-                  }
-                  const targetIp = targetPeer.ip;
-
-                  for (const f of droppedFiles) {
-                    const filePath = (f as any).path || f.name;
-                    await transmitFile(targetIp, filePath);
-                    playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
-                  }
-
-                  const newItems: TransferItem[] = droppedFiles.map((f) => ({
-                    id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                    name: f.name,
-                    size: f.size,
-                    type: 'file',
-                    progress: 1,
-                    status: 'completed',
-                    sender: 'هذا الجهاز',
-                    receiver: targetPeer.name,
-                    timestamp: Date.now(),
-                    verified: true,
-                  }));
-                  setTransfers((prev) => [...newItems, ...prev]);
-                }
-              }}
-              className={`otium-card rounded-2xl p-6 border-2 border-dashed transition-all text-center flex flex-col items-center justify-center gap-3 cursor-pointer ${
-                isDragging
-                  ? 'border-emerald-400 bg-emerald-500/10 scale-[1.01]'
-                  : 'border-white/[0.12] hover:border-emerald-500/40 hover:bg-white/[0.02]'
-              }`}
+              onClick={() => fileInputRef.current?.click()}
+              className="otium-card rounded-2xl p-6 border-2 border-dashed border-white/[0.12] hover:border-emerald-500/40 hover:bg-white/[0.02] transition-all text-center flex flex-col items-center justify-center gap-3 cursor-pointer"
             >
               <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <UploadCloud className="w-7 h-7" />
@@ -728,48 +800,56 @@ export const App: React.FC = () => {
                   بدون أي ضغط للجودة، مع فحص سلامة البيانات بنظام CRC32 ونقل متدفق مباشر
                 </p>
               </div>
-              <label className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold cursor-pointer border border-white/[0.08] transition-colors">
-                <span>أو اختر ملفاً من جهازك</span>
-                <input
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={async (e) => {
-                    const files = e.target.files ? Array.from(e.target.files) : [];
-                    if (files.length > 0) {
-                      const targetPeer = devices.find(
-                        (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
+              <button
+                type="button"
+                className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold border border-white/[0.08] transition-colors"
+              >
+                <span>أو اختر ملفاً من جهازك (Ctrl+O)</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = e.target.files ? Array.from(e.target.files) : [];
+                  if (files.length > 0) {
+                    const targetPeer = devices.find(
+                      (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
+                    );
+                    if (!targetPeer) {
+                      showToast(
+                        'warning',
+                        'لا يوجد جهاز مقترن حالياً',
+                        'شغّل Otium Link على الهاتف أو الحاسوب الآخر على نفس شبكة Wi-Fi أولاً'
                       );
-                      if (!targetPeer) {
-                        setPeerNotice('لا يوجد جهاز مقترن حالياً لنقل الملفات إليه. شغّل Otium Link على الجهاز الآخر أولاً.');
-                        setTimeout(() => setPeerNotice(null), 3500);
-                        return;
-                      }
-                      const targetIp = targetPeer.ip;
-
-                      for (const f of files) {
-                        const filePath = (f as any).path || f.name;
-                        await transmitFile(targetIp, filePath);
-                        playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
-                      }
-
-                      const newItems: TransferItem[] = files.map((f) => ({
-                        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                        name: f.name,
-                        size: f.size,
-                        type: 'file',
-                        progress: 1,
-                        status: 'completed',
-                        sender: 'هذا الجهاز',
-                        receiver: targetPeer.name,
-                        timestamp: Date.now(),
-                        verified: true,
-                      }));
-                      setTransfers((prev) => [...newItems, ...prev]);
+                      return;
                     }
-                  }}
-                />
-              </label>
+                    const targetIp = targetPeer.ip;
+
+                    for (const f of files) {
+                      const filePath = (f as any).path || f.name;
+                      await transmitFile(targetIp, filePath);
+                      playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+                    }
+
+                    const newItems: TransferItem[] = files.map((f) => ({
+                      id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                      name: f.name,
+                      size: f.size,
+                      type: 'file',
+                      progress: 1,
+                      status: 'completed',
+                      sender: 'هذا الجهاز',
+                      receiver: targetPeer.name,
+                      timestamp: Date.now(),
+                      verified: true,
+                    }));
+                    setTransfers((prev) => [...newItems, ...prev]);
+                    showToast('success', `تم إرسال ${files.length} ملفات`, `إلى ${targetPeer.name}`);
+                  }
+                }}
+              />
             </section>
           </>
         )}
@@ -937,7 +1017,10 @@ export const App: React.FC = () => {
                       </button>
 
                       <button
-                        onClick={() => removeClipboardHistoryItem(item.id)}
+                        onClick={() => {
+                          removeClipboardHistoryItem(item.id);
+                          playDeleteChime(appSettings.audioFeedback, appSettings.soundVolume);
+                        }}
                         title="حذف هذا العنصر"
                         className="p-1 rounded-lg text-gray-500 hover:text-red-400 hover:bg-white/5 transition-colors"
                       >
@@ -1002,13 +1085,19 @@ export const App: React.FC = () => {
                         {item.size > 0 ? `${formatBytes(item.size)} • ` : ''}من {item.sender} إلى {item.receiver}{' '}
                         • {formatTimestamp(item.timestamp)}
                       </span>
-                      {/* Live Progress Bar if transferring */}
+                      {/* Live Progress Bar and Speed Stats */}
                       {item.status === 'in_progress' && (
-                        <div className="w-full bg-white/10 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                          <div
-                            className="bg-emerald-400 h-full rounded-full transition-all duration-200"
-                            style={{ width: `${Math.round(item.progress * 100)}%` }}
-                          />
+                        <div className="space-y-1 mt-1.5">
+                          <div className="flex items-center justify-between text-[10px] text-emerald-400 font-mono">
+                            <span>{item.speedFormatted || 'جارٍ البث...'}</span>
+                            <span>{item.etaFormatted || ''} • {Math.round(item.progress * 100)}%</span>
+                          </div>
+                          <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className="bg-emerald-400 h-full rounded-full transition-all duration-200"
+                              style={{ width: `${Math.round(item.progress * 100)}%` }}
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1067,11 +1156,14 @@ export const App: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => openDownloadsFolder()}
+            onClick={() => {
+              openDownloadsFolder();
+              showToast('info', 'تم فتح مجلد التنزيلات');
+            }}
             className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
           >
             <FolderOpen className="w-3.5 h-3.5" />
-            <span>مجلد التنزيلات (OtiumLink)</span>
+            <span>مجلد التنزيلات (Ctrl+D)</span>
           </button>
         </div>
       </footer>
@@ -1087,6 +1179,13 @@ export const App: React.FC = () => {
           );
         }}
         onClearHistory={handleClearHistory}
+      />
+
+      {/* Direct IP Connect Modal */}
+      <DirectConnectModal
+        isOpen={isDirectConnectOpen}
+        onClose={() => setIsDirectConnectOpen(false)}
+        onAddDirectPeer={handleDirectPeerAdded}
       />
     </div>
   );

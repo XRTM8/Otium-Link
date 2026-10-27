@@ -76,3 +76,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.22);
 }
+
+@keyframes radar-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -21,6 +21,8 @@ export interface TransferItem {
   type: TransferType;
   progress: number; // 0 to 1
   speedBytesPerSec?: number;
+  speedFormatted?: string;
+  etaFormatted?: string;
   status: TransferStatus;
   sender: string;
   receiver: string;
