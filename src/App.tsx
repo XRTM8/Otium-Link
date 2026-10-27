@@ -24,6 +24,7 @@ import {
   File,
   Send,
   Zap,
+  ShieldAlert,
 } from 'lucide-react';
 import { OtiumLinkLogo } from './components/OtiumLinkLogo';
 import { SettingsModal } from './components/SettingsModal';
@@ -32,6 +33,7 @@ import { RadarVisualizer } from './components/RadarVisualizer';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Device, TransferItem } from './core/types';
 import { cleanUrl, formatBytes } from './core/urlCleaner';
+import { detectSensitiveContent } from './core/sensitiveDetector';
 import { loadSettings, saveSettings, AppSettings } from './core/settings';
 import {
   playReceiveChime,
@@ -288,6 +290,20 @@ export const App: React.FC = () => {
       onNativeClipboardChanged: (payload) => {
         const trimmed = payload.text.trim();
         if (trimmed === lastAutoSyncedRef.current) return;
+
+        // Security Shield: Prevent unintentional automatic broadcast of sensitive keys & cards
+        if (appSettings.blockSensitiveAutoSync) {
+          const sensitiveCheck = detectSensitiveContent(payload.text);
+          if (sensitiveCheck.isSensitive) {
+            showToast(
+              'warning',
+              'درع الحماية: تم تعليق البث التلقائي',
+              `تم رصد ${sensitiveCheck.labelArabic}. يمكنك إرساله يدوياً.`
+            );
+            addClipboardHistoryItem(payload.text, false);
+            return;
+          }
+        }
 
         const { cleanedUrl, wasCleaned } = appSettings.cleanTrackingLinks
           ? cleanUrl(payload.text)
@@ -568,7 +584,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.1.0 المصقول
+                v1.2.0 فائق التحصين
               </span>
             </div>
             <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
@@ -738,7 +754,15 @@ export const App: React.FC = () => {
               {/* Current Clipboard Box */}
               <div className="bg-black/40 border border-white/[0.08] rounded-xl p-3 space-y-2">
                 <div className="flex items-center justify-between text-[11px] text-gray-400">
-                  <span>المحتوى في الحافظة حالياً:</span>
+                  <div className="flex items-center gap-2">
+                    <span>المحتوى في الحافظة حالياً:</span>
+                    {detectSensitiveContent(clipboardText).isSensitive && (
+                      <span className="text-amber-400 font-bold text-[10px] flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-md">
+                        <ShieldAlert className="w-3 h-3" />
+                        <span>محتوى حساس: {detectSensitiveContent(clipboardText).labelArabic}</span>
+                      </span>
+                    )}
+                  </div>
                   {appSettings.cleanTrackingLinks && cleanUrl(clipboardText).wasCleaned && (
                     <span className="text-emerald-400 font-semibold text-[10px] flex items-center gap-1">
                       <ShieldCheck className="w-3 h-3" />

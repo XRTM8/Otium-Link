@@ -319,6 +319,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </button>
             </div>
+
+            {/* Sensitive Data Shield */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-white">درع حماية البيانات الحساسة</div>
+                  <div className="text-xs text-slate-400">حجب البث التلقائي للبطاقات البنكية، مفاتيح API، وبيانات المرور</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleOption('blockSensitiveAutoSync')}
+                aria-label="تبديل درع حماية البيانات الحساسة"
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  settings.blockSensitiveAutoSync ? 'bg-emerald-500' : 'bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    settings.blockSensitiveAutoSync ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           {/* Section 4: History & Vault Management */}

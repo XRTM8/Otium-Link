@@ -51,15 +51,39 @@ pub struct FileHeaderPayload {
     pub crc32: Option<u32>,
 }
 
+pub fn is_dangerous_unicode_char(c: char) -> bool {
+    matches!(
+        c,
+        // Bidirectional formatting characters (RTLO, LRE, RLE, etc.)
+        '\u{202A}'..='\u{202E}' |
+        '\u{2066}'..='\u{2069}' |
+        '\u{200E}' | '\u{200F}' | '\u{061C}' |
+        // Zero-width & invisible characters
+        '\u{200B}' | '\u{200C}' | '\u{200D}' | '\u{FEFF}' | '\u{00AD}'
+    )
+}
+
+pub fn is_private_or_local_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(ipv4) => {
+            ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local()
+        }
+        std::net::IpAddr::V6(ipv6) => {
+            ipv6.is_loopback() || (ipv6.segments()[0] & 0xfe00) == 0xfe80
+        }
+    }
+}
+
 pub fn sanitize_filename(raw: &str) -> String {
     let file_name = Path::new(raw)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    // Replace invalid/control characters with underscore
+    // Replace invalid/control characters with underscore, stripping dangerous unicode overrides
     let sanitized: String = file_name
         .chars()
+        .filter(|c| !is_dangerous_unicode_char(*c))
         .map(|c| {
             if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '\0') {
                 '_'
@@ -236,6 +260,10 @@ impl NetworkManager {
             let mut buf = [0u8; 1024];
             loop {
                 if let Ok((len, src_addr)) = socket.recv_from(&mut buf) {
+                    if !is_private_or_local_ip(&src_addr.ip()) {
+                        continue;
+                    }
+
                     if let Ok(beacon) = serde_json::from_slice::<BeaconMessage>(&buf[..len]) {
                         if beacon.magic != "OTIUM_LINK_V1" {
                             continue;
@@ -349,6 +377,7 @@ impl NetworkManager {
         const MAX_FILE_TRANSFER_SIZE: u64 = 100 * 1024 * 1024 * 1024; // 100GB
 
         let active_connections = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let rate_limiter = Arc::new(Mutex::new(HashMap::<std::net::IpAddr, (u32, std::time::Instant)>::new()));
 
         thread::spawn(move || {
             let listener = match TcpListener::bind(format!("0.0.0.0:{}", TCP_PORT)) {
@@ -361,6 +390,32 @@ impl NetworkManager {
 
             for stream in listener.incoming() {
                 if let Ok(mut stream) = stream {
+                    let peer_addr = match stream.peer_addr() {
+                        Ok(addr) => addr,
+                        Err(_) => continue,
+                    };
+
+                    // Local Subnet Firewall: Reject WAN / non-private IPs
+                    if !is_private_or_local_ip(&peer_addr.ip()) {
+                        continue;
+                    }
+
+                    // Per-IP Flood Rate Limiter: Max 15 connections per 3 seconds
+                    let ip = peer_addr.ip();
+                    {
+                        let mut limiter = rate_limiter.lock().unwrap();
+                        let now = std::time::Instant::now();
+                        let entry = limiter.entry(ip).or_insert((0, now));
+                        if now.duration_since(entry.1) > Duration::from_secs(3) {
+                            *entry = (1, now);
+                        } else {
+                            entry.0 += 1;
+                            if entry.0 > 15 {
+                                continue;
+                            }
+                        }
+                    }
+
                     let current = active_connections.load(std::sync::atomic::Ordering::Relaxed);
                     if current >= MAX_CONCURRENT_TCP_CONNECTIONS {
                         // Drop connection to prevent thread exhaustion DoS
@@ -689,5 +744,19 @@ mod tests {
         assert_eq!(sanitize_filename("hello:world*test?.pdf"), "hello_world_test_.pdf");
         assert_eq!(sanitize_filename("..."), "downloaded_file.bin");
         assert_eq!(sanitize_filename(""), "downloaded_file.bin");
+        // Unicode Right-to-Left Override (RTLO) spoofing attack stripped
+        assert_eq!(sanitize_filename("invoice\u{202E}fdp.exe"), "invoicefdp.exe");
+    }
+
+    #[test]
+    fn test_local_ip_firewall_validation() {
+        use std::net::IpAddr;
+        assert!(is_private_or_local_ip(&"127.0.0.1".parse::<IpAddr>().unwrap()));
+        assert!(is_private_or_local_ip(&"192.168.1.50".parse::<IpAddr>().unwrap()));
+        assert!(is_private_or_local_ip(&"10.0.5.22".parse::<IpAddr>().unwrap()));
+        assert!(is_private_or_local_ip(&"172.16.0.1".parse::<IpAddr>().unwrap()));
+        // WAN / Public IPs must be rejected
+        assert!(!is_private_or_local_ip(&"8.8.8.8".parse::<IpAddr>().unwrap()));
+        assert!(!is_private_or_local_ip(&"1.1.1.1".parse::<IpAddr>().unwrap()));
     }
 }

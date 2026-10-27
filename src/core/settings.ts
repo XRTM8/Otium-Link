@@ -9,6 +9,7 @@ export interface AppSettings {
   soundVolume: number; // 0.0 to 1.0
   cleanTrackingLinks: boolean;
   requireFileConfirmation: boolean;
+  blockSensitiveAutoSync: boolean;
   downloadDir: string;
   trustedPeers: string[];
 }
@@ -22,6 +23,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   soundVolume: 0.8,
   cleanTrackingLinks: true,
   requireFileConfirmation: false,
+  blockSensitiveAutoSync: true,
   downloadDir: '',
   trustedPeers: [],
 };

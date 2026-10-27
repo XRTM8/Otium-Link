@@ -31,6 +31,7 @@ describe('Settings Management', () => {
     expect(s.soundVolume).toBe(0.8);
     expect(s.cleanTrackingLinks).toBe(true);
     expect(s.requireFileConfirmation).toBe(false);
+    expect(s.blockSensitiveAutoSync).toBe(true);
     expect(Array.isArray(s.trustedPeers)).toBe(true);
   });
 
