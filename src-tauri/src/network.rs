@@ -412,6 +412,23 @@ impl NetworkManager {
                             if is_new {
                                 let _ = listener_app.emit("otium-link://peer-discovered", peer);
                             }
+                            let active_list: Vec<PeerDevice> = table.values().cloned().collect();
+                            let _ = listener_app.emit("otium-link://peers-updated", active_list);
+                        }
+
+                        // Send direct UDP unicast beacon reply back to src_addr to break asymmetric broadcast drops
+                        let reply_beacon = {
+                            let dev = listener_dev.lock().unwrap();
+                            BeaconMessage {
+                                magic: "OTIUM_LINK_V1".to_string(),
+                                id: dev.id.clone(),
+                                name: dev.name.clone(),
+                                os: dev.os.clone(),
+                                port: dev.port,
+                            }
+                        };
+                        if let Ok(reply_bytes) = serde_json::to_vec(&reply_beacon) {
+                            let _ = socket.send_to(&reply_bytes, format!("{}:{}", src_addr.ip(), BROADCAST_PORT));
                         }
                     }
                 }
@@ -486,6 +503,7 @@ impl NetworkManager {
     /// Starts TCP Server on port 42425 with CRC32 integrity validation, atomic temporary writing, and startup temp cleanup
     pub fn start_tcp_server(&self, app: AppHandle) {
         let downloads = self.downloads_dir.clone();
+        let peers = self.peers.clone();
         if let Ok(dir) = downloads.lock() {
             let _ = fs::create_dir_all(&*dir);
             let cleaned = cleanup_orphaned_tmp_files(&*dir);
@@ -549,6 +567,7 @@ impl NetworkManager {
                     let active_conn_clone = active_connections.clone();
                     let app_clone = app.clone();
                     let downloads_clone = downloads.clone();
+                    let peers_clone = peers.clone();
 
                     thread::spawn(move || {
                         struct ConnGuard(Arc<std::sync::atomic::AtomicUsize>);
@@ -587,6 +606,31 @@ impl NetworkManager {
                                 let mut payload = vec![0u8; payload_len];
                                 if stream.read_exact(&mut payload).is_ok() {
                                     if let Ok(clip) = serde_json::from_slice::<ClipboardPayload>(&payload) {
+                                        let sender_ip = peer_addr.ip().to_string();
+                                        let now = SystemTime::now()
+                                            .duration_since(UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs();
+                                        let peer_id = format!("peer_{}", sender_ip.replace('.', "_").replace(':', "_"));
+                                        let peer = PeerDevice {
+                                            id: peer_id.clone(),
+                                            name: clip.sender.clone(),
+                                            os: if cfg!(target_os = "android") { "windows".to_string() } else { "android".to_string() },
+                                            ip: sender_ip,
+                                            port: TCP_PORT,
+                                            last_seen: now,
+                                            is_self: false,
+                                        };
+                                        {
+                                            let mut table = peers_clone.lock().unwrap();
+                                            let is_new = !table.contains_key(&peer_id);
+                                            table.insert(peer_id, peer.clone());
+                                            if is_new {
+                                                let _ = app_clone.emit("otium-link://peer-discovered", peer);
+                                            }
+                                            let active_list: Vec<PeerDevice> = table.values().cloned().collect();
+                                            let _ = app_clone.emit("otium-link://peers-updated", active_list);
+                                        }
                                         let _ = app_clone.emit("otium-link://clipboard-received", clip);
                                     }
                                 }
@@ -601,6 +645,32 @@ impl NetworkManager {
                                     if let Ok(header) = serde_json::from_slice::<FileHeaderPayload>(&header_bytes) {
                                         if header.file_size > MAX_FILE_TRANSFER_SIZE {
                                             return;
+                                        }
+
+                                        let sender_ip = peer_addr.ip().to_string();
+                                        let now = SystemTime::now()
+                                            .duration_since(UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs();
+                                        let peer_id = format!("peer_{}", sender_ip.replace('.', "_").replace(':', "_"));
+                                        let peer = PeerDevice {
+                                            id: peer_id.clone(),
+                                            name: header.sender.clone(),
+                                            os: if cfg!(target_os = "android") { "windows".to_string() } else { "android".to_string() },
+                                            ip: sender_ip,
+                                            port: TCP_PORT,
+                                            last_seen: now,
+                                            is_self: false,
+                                        };
+                                        {
+                                            let mut table = peers_clone.lock().unwrap();
+                                            let is_new = !table.contains_key(&peer_id);
+                                            table.insert(peer_id, peer.clone());
+                                            if is_new {
+                                                let _ = app_clone.emit("otium-link://peer-discovered", peer);
+                                            }
+                                            let active_list: Vec<PeerDevice> = table.values().cloned().collect();
+                                            let _ = app_clone.emit("otium-link://peers-updated", active_list);
                                         }
 
                                         let safe_name = sanitize_filename(&header.file_name);

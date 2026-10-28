@@ -15,9 +15,11 @@ interface ToastProps {
 }
 
 export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
+  // Cap visible toasts to maximum 3 to prevent notification flooding/screen takeover
+  const visibleToasts = toasts.slice(-3);
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full px-4 font-tajawal">
-      {toasts.map((toast) => (
+      {visibleToasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
       ))}
     </div>

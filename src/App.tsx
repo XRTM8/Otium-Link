@@ -84,12 +84,26 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDirectConnectOpen, setIsDirectConnectOpen] = useState(false);
 
-  // Floating Toasts
+  // Floating Toasts with Deduplication and Throttling
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const lastToastTimeRef = useRef<{ [key: string]: number }>({});
+  const recentlyReceivedClipboards = useRef<Map<string, number>>(new Map());
+  const lastAutoBroadcastTime = useRef<number>(0);
+
   const showToast = useCallback(
     (type: 'success' | 'info' | 'warning', title: string, description?: string) => {
-      const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      setToasts((prev) => [...prev, { id, type, title, description }]);
+      const key = `${type}:${title}:${description || ''}`;
+      const now = Date.now();
+      if (lastToastTimeRef.current[key] && now - lastToastTimeRef.current[key] < 3000) {
+        return; // Drop duplicate toast within 3 seconds to prevent notification storm
+      }
+      lastToastTimeRef.current[key] = now;
+
+      const id = `toast_${now}_${Math.random().toString(36).substring(2, 6)}`;
+      setToasts((prev) => {
+        const next = [...prev, { id, type, title, description }];
+        return next.slice(-4);
+      });
       if (type === 'warning') {
         playWarningChime(appSettings.audioFeedback, appSettings.soundVolume);
       } else if (type === 'success') {
@@ -297,6 +311,17 @@ export const App: React.FC = () => {
       },
       onClipboardReceived: (clip) => {
         const trimmed = clip.text.trim();
+        if (!trimmed) return;
+
+        // Register in incoming cache with 20s TTL to suppress native OS clipboard echo loop
+        recentlyReceivedClipboards.current.set(trimmed, Date.now());
+        const now = Date.now();
+        for (const [k, t] of recentlyReceivedClipboards.current.entries()) {
+          if (now - t > 20_000) {
+            recentlyReceivedClipboards.current.delete(k);
+          }
+        }
+
         setClipboardText(clip.text);
         lastAutoSyncedRef.current = trimmed;
         addClipboardHistoryItem(clip.text, false);
@@ -324,9 +349,19 @@ export const App: React.FC = () => {
       },
       onNativeClipboardChanged: (payload) => {
         const trimmed = payload.text.trim();
+        if (!trimmed) return;
+
+        // 1. Guard against local redundant trigger
         if (trimmed === lastAutoSyncedRef.current) return;
 
-        // Security Shield: Prevent unintentional automatic broadcast of sensitive keys & cards
+        // 2. CRITICAL: Guard against network reflection echo loop
+        const receivedTime = recentlyReceivedClipboards.current.get(trimmed);
+        if (receivedTime && Date.now() - receivedTime < 20_000) {
+          lastAutoSyncedRef.current = trimmed;
+          return; // Dropped network reflection!
+        }
+
+        // 3. Security Shield: Prevent unintentional automatic broadcast of sensitive keys & cards
         if (appSettings.blockSensitiveAutoSync) {
           const sensitiveCheck = detectSensitiveContent(payload.text);
           if (sensitiveCheck.isSensitive) {
@@ -346,7 +381,13 @@ export const App: React.FC = () => {
 
         addClipboardHistoryItem(cleanedUrl, wasCleaned);
 
+        // 4. Rate-limited broadcast
         if (appSettings.autoClipboardSync) {
+          const now = Date.now();
+          if (now - lastAutoBroadcastTime.current < 2500) {
+            return; // Throttled to prevent flooding
+          }
+          lastAutoBroadcastTime.current = now;
           handleTransmitClipboardText(payload.text, true);
         }
       },
