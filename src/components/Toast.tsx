@@ -46,7 +46,7 @@ const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => void
       aria-live="polite"
       className={`pointer-events-auto flex items-start justify-between gap-3 p-3.5 rounded-2xl shadow-2xl border backdrop-blur-xl animate-in slide-in-from-top-3 fade-in duration-200 ${
         isSuccess
-          ? 'bg-[#061811]/95 border-emerald-500/40 text-emerald-100 shadow-emerald-500/10'
+          ? 'bg-[#09101f]/95 border-blue-500/40 text-blue-100 shadow-blue-500/10'
           : isWarning
           ? 'bg-[#1c1205]/95 border-amber-500/40 text-amber-100 shadow-amber-500/10'
           : 'bg-[#0d131f]/95 border-cyan-500/40 text-cyan-100 shadow-cyan-500/10'
@@ -54,7 +54,7 @@ const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => void
     >
       <div className="flex items-start gap-2.5 min-w-0">
         <div className="mt-0.5 shrink-0">
-          {isSuccess && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+          {isSuccess && <CheckCircle2 className="w-4 h-4 text-blue-400" />}
           {isWarning && <AlertCircle className="w-4 h-4 text-amber-400" />}
           {!isSuccess && !isWarning && <Info className="w-4 h-4 text-cyan-400" />}
         </div>

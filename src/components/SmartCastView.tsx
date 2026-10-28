@@ -384,9 +384,9 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
             <button
               onClick={handleToggleCast}
               disabled={isLoading}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2.5 mx-auto shadow-xl shadow-emerald-500/20 transition-all otium-press"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm flex items-center justify-center gap-2.5 mx-auto shadow-xl shadow-blue-600/30 transition-all otium-press"
             >
-              <Play className="w-5 h-5 fill-slate-950" />
+              <Play className="w-5 h-5 fill-white" />
               <span>بدء البث على السبورة الآن</span>
             </button>
           </div>
@@ -398,9 +398,9 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
               type="button"
               onClick={() => pdfInputRef.current?.click()}
               disabled={isConvertingPdf}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-200 text-xs font-bold transition-all otium-press"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-200 text-xs font-bold transition-all otium-press"
             >
-              {isConvertingPdf ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4 text-purple-300" />}
+              {isConvertingPdf ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4 text-indigo-300" />}
               <span>{isConvertingPdf ? pdfProgressText : 'استيراد المحاضرة (PDF)'}</span>
             </button>
 
@@ -432,7 +432,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
               onClick={() => openExternalUrl(castInfo.url)}
               className="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 flex items-center gap-1.5 transition-colors otium-press"
             >
-              <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+              <Maximize2 className="w-3.5 h-3.5 text-blue-400" />
               <span>معاينة شاشة العرض</span>
             </button>
           </div>
@@ -442,7 +442,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
         <div className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold text-white flex items-center gap-2">
-              <FileText className="w-4 h-4 text-emerald-400" />
+              <FileText className="w-4 h-4 text-blue-400" />
               <span>الشرائح المجهزة للعرض ({slides.length})</span>
             </span>
             <span>جاهزة للبث الفوري</span>
@@ -455,7 +455,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
                 className="shrink-0 w-28 h-20 rounded-xl bg-black/40 border border-white/10 p-2 flex flex-col justify-between text-[10px]"
               >
                 <span className="font-bold text-slate-200 truncate">{s.title || `شريحة ${idx + 1}`}</span>
-                <span className="font-mono text-emerald-400">#{idx + 1}</span>
+                <span className="font-mono text-blue-400">#{idx + 1}</span>
               </div>
             ))}
           </div>
@@ -472,7 +472,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
       {/* Top Remote Status Pill Bar */}
       <div className="otium-card rounded-2xl p-3 border border-white/[0.08] flex items-center justify-between gap-2 shadow-lg">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-400 flex items-center justify-center shrink-0">
             <Radio className="w-4 h-4 animate-pulse" />
           </div>
           <div className="min-w-0">
@@ -482,7 +482,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
             </div>
             <button
               onClick={handleCopyUrl}
-              className="text-[11px] text-slate-400 hover:text-emerald-400 font-mono truncate block text-right dir-ltr"
+              className="text-[11px] text-slate-400 hover:text-blue-400 font-mono truncate block text-right dir-ltr"
             >
               {castInfo.url} {copiedUrl ? '✓' : ''}
             </button>
@@ -492,7 +492,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
         <div className="flex items-center gap-2 shrink-0">
           {/* Stopwatch */}
           <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/50 border border-white/10 font-mono text-xs font-bold text-white">
-            <Clock className="w-3.5 h-3.5 text-emerald-400" />
+            <Clock className="w-3.5 h-3.5 text-blue-400" />
             <span>{formatTimer(timerSeconds)}</span>
           </div>
 
@@ -503,7 +503,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
               className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300"
               title="باركود الدخول"
             >
-              <QrCode className="w-4 h-4 text-emerald-400" />
+              <QrCode className="w-4 h-4 text-blue-400" />
             </button>
           )}
 
@@ -520,7 +520,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
 
       {/* Hero Slide Canvas (Clean, Focused View) */}
       <div className="otium-card rounded-3xl p-5 sm:p-6 border border-white/[0.08] text-center space-y-3 relative overflow-hidden shadow-2xl min-h-[220px] flex flex-col justify-center items-center">
-        <span className="text-[11px] font-mono font-bold text-emerald-400 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+        <span className="text-[11px] font-mono font-bold text-blue-400 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
           الشريحة {currentSlideIdx + 1} من {slides.length}
         </span>
 
@@ -554,7 +554,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
         <button
           onClick={handleNextSlide}
           disabled={currentSlideIdx === slides.length - 1}
-          className="py-4 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-25 disabled:pointer-events-none text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all otium-press"
+          className="py-4 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-25 disabled:pointer-events-none text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all otium-press"
         >
           <span>التالية</span>
           <ChevronLeft className="w-5 h-5" />
@@ -585,11 +585,11 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
           }}
           className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-1.5 font-bold transition-all ${
             showTouchpadDrawer && interactionMode === 'pen'
-              ? 'bg-emerald-500 text-slate-950 shadow-md'
+              ? 'bg-indigo-600 text-white shadow-md'
               : 'hover:bg-white/5 text-slate-300'
           }`}
         >
-          <PenTool className="w-4 h-4 text-emerald-400" />
+          <PenTool className="w-4 h-4 text-indigo-400" />
           <span>القلم</span>
         </button>
 
@@ -616,7 +616,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
         <div className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3 animate-otium-enter">
           <div className="flex items-center justify-between text-xs text-slate-300">
             <span className="font-bold flex items-center gap-2">
-              {interactionMode === 'laser' ? <Crosshair className="w-4 h-4 text-rose-400" /> : <PenTool className="w-4 h-4 text-emerald-400" />}
+              {interactionMode === 'laser' ? <Crosshair className="w-4 h-4 text-rose-400" /> : <PenTool className="w-4 h-4 text-indigo-400" />}
               <span>{interactionMode === 'laser' ? 'لوحة تحكم الليزر الحي' : 'لوحة الرسم والتأشير الحي'}</span>
             </span>
             {interactionMode === 'pen' && (
@@ -653,7 +653,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
             }}
             onTouchEnd={handleTrackpadEnd}
             className={`relative w-full aspect-video rounded-xl bg-black/60 border-2 border-dashed transition-colors cursor-crosshair flex items-center justify-center overflow-hidden touch-none ${
-              interactionMode === 'laser' ? 'border-rose-500/40' : 'border-emerald-500/40'
+              interactionMode === 'laser' ? 'border-rose-500/40' : 'border-indigo-500/40'
             }`}
           >
             {isLaserActive && interactionMode === 'laser' && (
@@ -672,10 +672,10 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast }) => {
       {/* QR Code Modal */}
       {showQrModal && qrDataUrl && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-otium-fade" onClick={() => setShowQrModal(false)}>
-          <div className="otium-card max-w-sm w-full p-6 rounded-3xl border border-emerald-500/30 text-center space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="otium-card max-w-sm w-full p-6 rounded-3xl border border-blue-500/30 text-center space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <QrCode className="w-5 h-5 text-emerald-400" />
+                <QrCode className="w-5 h-5 text-blue-400" />
                 <span>رمز الدخول السريع</span>
               </h3>
               <button onClick={() => setShowQrModal(false)} className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white">

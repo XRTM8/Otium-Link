@@ -708,18 +708,18 @@ export const App: React.FC = () => {
             const droppedFiles = Array.from(e.dataTransfer.files);
             handleSendFiles(droppedFiles);
           }}
-          className="fixed inset-0 z-50 bg-[#07090e]/92 backdrop-blur-md flex flex-col items-center justify-center border-4 border-dashed border-emerald-400 p-6 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-[#08090d]/95 backdrop-blur-md flex flex-col items-center justify-center border-4 border-dashed border-blue-500/70 p-6 animate-in fade-in duration-150"
         >
-          <div className="p-5 rounded-3xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 mb-3 animate-bounce">
+          <div className="p-5 rounded-3xl bg-blue-500/15 border border-blue-500/30 text-blue-400 mb-3 animate-bounce shadow-xl shadow-blue-500/20">
             <UploadCloud className="w-12 h-12" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-1">أفلت الملفات للإرسال اللحظي المباشر</h2>
-          <p className="text-sm text-emerald-300">
+          <h2 className="text-xl font-bold text-white mb-1">أفلت الملفات للإرسال اللحظي</h2>
+          <p className="text-sm text-blue-300">
             {activePeers.length > 0
               ? `المستهدف: ${devices.find((d) => d.id === selectedPeerId)?.name || activePeers[0].name}`
               : 'يرجى تشغيل التطبيق على الجهاز المقترن'}
           </p>
-          <span className="text-xs text-gray-400 mt-2 font-mono">
+          <span className="text-xs text-slate-400 mt-2 font-mono">
             نقل مباشر عالي السرعة مع التحقق التلقائي بنظام CRC32
           </span>
         </div>
@@ -737,17 +737,12 @@ export const App: React.FC = () => {
                 {isMobile ? 'Otium Link' : 'Otium Link | أوتيوم لينك'}
               </h1>
               {!isMobile && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30 shrink-0">
-                  v1.6.2 الأوفر هول الشامل
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-semibold border border-blue-500/30 shrink-0 font-mono">
+                  v1.7.0
                 </span>
               )}
-              {isMobile && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
+              {isMobile && <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />}
             </div>
-            {!isMobile && (
-              <p className="text-[11px] text-gray-400 truncate">
-                الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك عبر الشبكة المحلية
-              </p>
-            )}
           </div>
         </div>
 
@@ -756,7 +751,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs">
             <Wifi
               className={`w-3.5 h-3.5 ${
-                activePeers.length > 0 ? 'text-emerald-400 animate-pulse' : 'text-slate-400'
+                activePeers.length > 0 ? 'text-blue-400 animate-pulse' : 'text-slate-400'
               }`}
             />
             <span className="text-gray-300 font-medium text-[11px] sm:text-xs">
@@ -808,7 +803,7 @@ export const App: React.FC = () => {
           onClick={() => setActiveTab('live')}
           className={`flex items-center gap-1.5 sm:gap-2 px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
             activeTab === 'live'
-              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
+              ? 'bg-blue-600/20 text-blue-300 border border-blue-500/35 shadow-sm shadow-blue-500/15'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
@@ -820,11 +815,11 @@ export const App: React.FC = () => {
           onClick={() => setActiveTab('cast')}
           className={`flex items-center gap-1.5 sm:gap-2 px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
             activeTab === 'cast'
-              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/15'
+              ? 'bg-indigo-600/25 text-indigo-300 border border-indigo-500/40 shadow-sm shadow-indigo-500/20'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
-          <Tv className="w-3.5 h-3.5 text-purple-400" />
+          <Tv className="w-3.5 h-3.5 text-indigo-400" />
           <span>{isMobile ? 'العرض' : 'العرض الذكي (Smart Cast)'}</span>
         </button>
 
@@ -832,14 +827,14 @@ export const App: React.FC = () => {
           onClick={() => setActiveTab('vault')}
           className={`flex items-center gap-1.5 sm:gap-2 px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
             activeTab === 'vault'
-              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
+              ? 'bg-blue-600/20 text-blue-300 border border-blue-500/35 shadow-sm shadow-blue-500/15'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
           <ClipboardList className="w-3.5 h-3.5" />
           <span>{isMobile ? 'الخزينة' : 'السجل والخزينة'}</span>
           {clipboardHistory.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-300 font-mono">
               {clipboardHistory.length}
             </span>
           )}
@@ -876,7 +871,7 @@ export const App: React.FC = () => {
                   <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-xs text-slate-400 space-y-1.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-slate-300">الجهاز النشط:</span>
-                      <span className="text-emerald-400 font-mono font-bold">
+                      <span className="text-blue-400 font-mono font-bold">
                         {devices.find((d) => d.id === selectedPeerId)?.name || 'الكل'}
                       </span>
                     </div>
@@ -894,15 +889,15 @@ export const App: React.FC = () => {
                 <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-bold text-gray-200">
-                      <Copy className="w-4 h-4 text-emerald-400" />
-                      <span>الحافظة الحية التلقائية (Live Clipboard Bridge)</span>
+                      <Copy className="w-4 h-4 text-blue-400" />
+                      <span>الحافظة الفورية (Instant Clipboard)</span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {/* Clean link privacy indicator */}
                       <div
                         title="درع الخصوصية لتطهير الروابط"
-                        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-semibold"
+                        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/25 font-semibold"
                       >
                         <ShieldCheck className="w-3 h-3" />
                         <span>درع الخصوصية</span>
@@ -911,7 +906,7 @@ export const App: React.FC = () => {
                       <div
                         className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
                           appSettings.autoClipboardSync
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
                             : 'bg-white/5 text-gray-400 border-white/10'
                         }`}
                       >
@@ -922,8 +917,8 @@ export const App: React.FC = () => {
 
                   {/* Clean Link Stripped Notification */}
                   {cleanUrl(clipboardText).wasCleaned && (
-                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
-                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                    <div className="flex items-center gap-1.5 text-[11px] text-blue-300 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-xl">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-blue-400" />
                       <span>تم تطهير بارامترات التتبع بنجاح (UTM / Tracking params)</span>
                     </div>
                   )}
@@ -935,7 +930,7 @@ export const App: React.FC = () => {
                       onChange={(e) => setClipboardText(e.target.value)}
                       placeholder="الصق أو اكتب أي نص هنا للإرسال اللحظي..."
                       rows={isMobile ? 3 : 4}
-                      className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 font-sans resize-none transition-all"
+                      className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500/50 font-sans resize-none transition-all"
                     />
                     <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 text-[10px] text-gray-500 font-mono">
                       <span>{clipboardText.length} حرفاً</span>
@@ -948,7 +943,7 @@ export const App: React.FC = () => {
                   <div className="flex items-center gap-2.5 pt-0.5">
                     <button
                       onClick={() => handleTransmitClipboardText(clipboardText, false)}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all otium-press"
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all otium-press"
                     >
                       <Send className="w-4 h-4" />
                       <span>{isMobile ? 'إرسال للجهاز المقترن فوراً' : 'إرسال للجهاز المقترن فوراً (Ctrl+Enter)'}</span>
@@ -960,8 +955,8 @@ export const App: React.FC = () => {
                     >
                       {copiedSuccess ? (
                         <>
-                          <Check className="w-4 h-4 text-emerald-400" />
-                          <span className="text-emerald-400">تم النسخ</span>
+                          <Check className="w-4 h-4 text-blue-400" />
+                          <span className="text-blue-400">تم النسخ</span>
                         </>
                       ) : (
                         <>
@@ -976,9 +971,9 @@ export const App: React.FC = () => {
                 {/* Touch & Drag-and-Drop File Dispatch Section */}
                 <section
                   onClick={() => fileInputRef.current?.click()}
-                  className="otium-card rounded-2xl p-5 sm:p-6 border-2 border-dashed border-white/15 hover:border-emerald-500/50 transition-all cursor-pointer flex flex-col items-center justify-center text-center space-y-2 group otium-press"
+                  className="otium-card rounded-2xl p-5 sm:p-6 border-2 border-dashed border-white/15 hover:border-blue-500/50 transition-all cursor-pointer flex flex-col items-center justify-center text-center space-y-2 group otium-press"
                 >
-                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
+                  <div className="p-3.5 rounded-2xl bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20 group-hover:scale-110 transition-all">
                     <UploadCloud className="w-8 h-8" />
                   </div>
 
@@ -995,7 +990,7 @@ export const App: React.FC = () => {
 
                   <button
                     type="button"
-                    className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] group-hover:bg-emerald-500/20 text-gray-200 group-hover:text-emerald-300 text-xs font-semibold border border-white/[0.08] group-hover:border-emerald-500/30 transition-all otium-press"
+                    className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] group-hover:bg-blue-500/20 text-gray-200 group-hover:text-blue-300 text-xs font-semibold border border-white/[0.08] group-hover:border-blue-500/30 transition-all otium-press"
                   >
                     <span>{isMobile ? 'تصفح الملفات في الهاتف' : 'أو اختر ملفاً من جهازك (Ctrl+O)'}</span>
                   </button>
@@ -1028,7 +1023,7 @@ export const App: React.FC = () => {
                 onClick={() => setVaultTab('clipboard')}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all otium-press flex items-center justify-center gap-1.5 ${
                   vaultTab === 'clipboard'
-                    ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1041,7 +1036,7 @@ export const App: React.FC = () => {
                 onClick={() => setVaultTab('transfers')}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all otium-press flex items-center justify-center gap-1.5 ${
                   vaultTab === 'transfers'
-                    ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1055,8 +1050,8 @@ export const App: React.FC = () => {
               {/* Header & Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <ClipboardList className="w-4 h-4 text-emerald-400" />
-                  <span className="text-sm font-bold text-white">خزينة سجل الحافظة المشفر محلياً</span>
+                  <ClipboardList className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-bold text-white">خزينة الحافظة المشفرة محلياً</span>
                   <span className="text-xs text-gray-400 font-mono">({clipboardHistory.length} عنصر)</span>
                 </div>
 
@@ -1068,7 +1063,7 @@ export const App: React.FC = () => {
                     value={clipboardSearch}
                     onChange={(e) => setClipboardSearch(e.target.value)}
                     placeholder="بحث في سجل الحافظة..."
-                    className="w-full pr-8 pl-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
+                    className="w-full pr-8 pl-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
                   />
                 </div>
               </div>
@@ -1079,7 +1074,7 @@ export const App: React.FC = () => {
                   onClick={() => setClipboardFilter('all')}
                   className={`px-3 py-1 rounded-lg font-semibold transition-colors otium-press shrink-0 ${
                     clipboardFilter === 'all'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
                       : 'bg-white/5 text-gray-400 hover:text-white'
                   }`}
                 >
@@ -1089,7 +1084,7 @@ export const App: React.FC = () => {
                   onClick={() => setClipboardFilter('url')}
                   className={`flex items-center gap-1 px-3 py-1 rounded-lg font-semibold transition-colors otium-press shrink-0 ${
                     clipboardFilter === 'url'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
                       : 'bg-white/5 text-gray-400 hover:text-white'
                   }`}
                 >
@@ -1100,7 +1095,7 @@ export const App: React.FC = () => {
                   onClick={() => setClipboardFilter('text')}
                   className={`flex items-center gap-1 px-3 py-1 rounded-lg font-semibold transition-colors otium-press shrink-0 ${
                     clipboardFilter === 'text'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
                       : 'bg-white/5 text-gray-400 hover:text-white'
                   }`}
                 >
@@ -1111,7 +1106,7 @@ export const App: React.FC = () => {
                   onClick={() => setClipboardFilter('code')}
                   className={`flex items-center gap-1 px-3 py-1 rounded-lg font-semibold transition-colors otium-press shrink-0 ${
                     clipboardFilter === 'code'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
                       : 'bg-white/5 text-gray-400 hover:text-white'
                   }`}
                 >
@@ -1139,7 +1134,7 @@ export const App: React.FC = () => {
                             item.isSensitive
                               ? 'bg-amber-500/15 text-amber-400'
                               : item.type === 'url'
-                              ? 'bg-emerald-500/10 text-emerald-400'
+                              ? 'bg-blue-500/10 text-blue-400'
                               : item.type === 'code'
                               ? 'bg-purple-500/10 text-purple-400'
                               : 'bg-cyan-500/10 text-cyan-400'
@@ -1162,7 +1157,7 @@ export const App: React.FC = () => {
                           <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
                             <span>{formatTimestamp(item.timestamp)}</span>
                             {item.isCleanedUrl && (
-                              <span className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded font-semibold">
+                              <span className="text-blue-400 bg-blue-500/10 px-1.5 py-0.2 rounded font-semibold">
                                 تطهير UTM
                               </span>
                             )}
@@ -1196,7 +1191,7 @@ export const App: React.FC = () => {
                         <button
                           onClick={() => handleTransmitClipboardText(item.text, false)}
                           title="إرسال للجهاز المقترن"
-                          className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors otium-press"
+                          className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors otium-press"
                         >
                           <Send className="w-3.5 h-3.5" />
                         </button>
@@ -1206,7 +1201,7 @@ export const App: React.FC = () => {
                           className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors otium-press"
                         >
                           {copiedHistoryId === item.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <Check className="w-3.5 h-3.5 text-blue-400" />
                           ) : (
                             <Copy className="w-3.5 h-3.5" />
                           )}
@@ -1239,14 +1234,14 @@ export const App: React.FC = () => {
             <section className="otium-card rounded-2xl p-4 sm:p-5 border border-white/[0.08] space-y-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <FileText className="w-4 h-4 text-blue-400" />
                   <span>سجل النقل اللحظي والملفات المتبادلة</span>
                 </span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => openDownloadsFolder()}
                     title="فتح مجلد التنزيلات"
-                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-emerald-400 hover:text-emerald-300 transition-colors text-[11px] font-semibold flex items-center gap-1.5 otium-press"
+                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-blue-400 hover:text-blue-300 transition-colors text-[11px] font-semibold flex items-center gap-1.5 otium-press"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     <span>مجلد التنزيلات</span>
@@ -1273,7 +1268,7 @@ export const App: React.FC = () => {
                       <div
                         className={`p-2 rounded-lg shrink-0 ${
                           item.type === 'file'
-                            ? 'bg-emerald-500/10 text-emerald-400'
+                            ? 'bg-blue-500/10 text-blue-400'
                             : 'bg-cyan-500/10 text-cyan-400'
                         }`}
                       >
@@ -1288,13 +1283,13 @@ export const App: React.FC = () => {
                         {/* Live Progress Bar and Speed Stats */}
                         {item.status === 'in_progress' && (
                           <div className="space-y-1 mt-1.5">
-                            <div className="flex items-center justify-between text-[10px] text-emerald-400 font-mono">
+                            <div className="flex items-center justify-between text-[10px] text-blue-400 font-mono">
                               <span>{item.speedFormatted || 'جارٍ البث...'}</span>
                               <span>{item.etaFormatted || ''} • {Math.round(item.progress * 100)}%</span>
                             </div>
                             <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
                               <div
-                                className="bg-emerald-400 h-full rounded-full transition-all duration-300 ease-out"
+                                className="bg-blue-500 h-full rounded-full transition-all duration-300 ease-out"
                                 style={{ width: `${Math.round(item.progress * 100)}%` }}
                               />
                             </div>
@@ -1316,7 +1311,7 @@ export const App: React.FC = () => {
                           <button
                             onClick={() => openDownloadsFolder()}
                             title="عرض في مجلد التنزيلات"
-                            className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-emerald-400 hover:text-emerald-300 transition-colors otium-press"
+                            className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-blue-400 hover:text-blue-300 transition-colors otium-press"
                           >
                             <FolderOpen className="w-3.5 h-3.5" />
                           </button>
@@ -1332,7 +1327,7 @@ export const App: React.FC = () => {
                         </button>
                       )}
                       {item.status === 'completed' && (
-                        <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg">
+                        <div className="flex items-center gap-1 text-[11px] text-blue-400 font-semibold bg-blue-500/10 px-2 py-0.5 rounded-lg">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>{item.verified ? 'مؤكد CRC32 ✓' : 'تم بنجاح'}</span>
                         </div>
@@ -1372,12 +1367,12 @@ export const App: React.FC = () => {
       {/* ADAPTIVE FOOTER INFO */}
       {/* ========================================================= */}
       <footer className="otium-chrome px-4 py-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-gray-400 shrink-0 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
-        <div className="flex items-center gap-1.5 text-emerald-400/90 font-medium truncate">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+        <div className="flex items-center gap-1.5 text-blue-400/90 font-medium truncate">
+          <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
           <span className="truncate">
             {isMobile
-              ? 'تشفير محلي تام • رخصة GNU GPL v3'
-              : 'منظومة Otium — تشفير محلي تام بدون أي خوادم سحابية | رخصة GNU GPL v3'}
+              ? 'P2P Mesh • تشفير محلي تام'
+              : 'منظومة Otium Link — شبكة P2P Mesh محلية • تشفير محلي تام'}
           </span>
         </div>
         <div className="flex items-center gap-3 shrink-0">
@@ -1386,7 +1381,7 @@ export const App: React.FC = () => {
               openDownloadsFolder();
               showToast('info', 'تم فتح مجلد التنزيلات');
             }}
-            className="flex items-center gap-1 hover:text-emerald-400 transition-colors otium-press"
+            className="flex items-center gap-1 hover:text-blue-400 transition-colors otium-press"
           >
             <FolderOpen className="w-3.5 h-3.5" />
             <span>{isMobile ? 'التنزيلات' : 'مجلد التنزيلات (Ctrl+D)'}</span>

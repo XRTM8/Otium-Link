@@ -139,7 +139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-white/10 bg-white/[0.02] shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
               <Laptop className="w-4 h-4" />
             </div>
             <div>
@@ -162,7 +162,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 pb-32 overscroll-contain">
           {/* Section 1: Device Identity */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
               <Laptop className="w-3.5 h-3.5" />
               <span>هوية الجهاز والتخزين المحلي</span>
             </h3>
@@ -176,20 +176,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={deviceNameInput}
                 onChange={(e) => setDeviceNameInput(e.target.value)}
                 placeholder="مثال: حاسوبي المحمول أو هاتف Otium"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 text-sm transition-all"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 text-sm transition-all"
               />
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Folder className="w-3.5 h-3.5 text-emerald-400" />
+                  <Folder className="w-3.5 h-3.5 text-blue-400" />
                   <span>مجلد حفظ الملفات المستلمة</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => setDownloadPathInput('Downloads/OtiumLink')}
-                  className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors"
+                  className="flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
                   title="استعادة المجلد الافتراضي"
                 >
                   <RotateCcw className="w-3 h-3" />
@@ -201,14 +201,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={downloadPathInput}
                 onChange={(e) => setDownloadPathInput(e.target.value)}
                 placeholder="Downloads/OtiumLink"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 text-xs font-mono dir-ltr text-left transition-all truncate"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 text-xs font-mono dir-ltr text-left transition-all truncate"
               />
             </div>
           </div>
 
           {/* Section 2: Audio & Feedback */}
           <div className="space-y-3 pt-3 border-t border-white/10">
-            <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
               <Volume2 className="w-3.5 h-3.5" />
               <span>الصوت والنغمات الهارمونية</span>
             </h3>
@@ -224,7 +224,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onClick={() => toggleOption('audioFeedback')}
                   aria-label="تبديل التنبيهات الصوتية"
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
-                    settings.audioFeedback ? 'bg-emerald-500' : 'bg-slate-700'
+                    settings.audioFeedback ? 'bg-blue-600' : 'bg-slate-700'
                   }`}
                 >
                   <span
@@ -245,18 +245,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       max="100"
                       value={Math.round(settings.soundVolume * 100)}
                       onChange={(e) => handleVolumeChange(parseInt(e.target.value, 10) / 100)}
-                      className="w-full accent-emerald-500 h-1.5 bg-white/10 rounded-lg cursor-pointer"
+                      className="w-full accent-blue-500 h-1.5 bg-white/10 rounded-lg cursor-pointer"
                     />
-                    <span className="text-xs font-mono text-emerald-400 shrink-0 w-8 text-left">
+                    <span className="text-xs font-mono text-blue-400 shrink-0 w-8 text-left">
                       {Math.round(settings.soundVolume * 100)}%
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={handleTestChime}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition-colors otium-press shrink-0"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-semibold transition-colors otium-press shrink-0"
                   >
-                    <Play className="w-3 h-3 fill-emerald-300" />
+                    <Play className="w-3 h-3 fill-blue-300" />
                     <span>اختبار</span>
                   </button>
                 </div>
@@ -266,7 +266,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Section 3: Automation & Privacy Shields */}
           <div className="space-y-3 pt-3 border-t border-white/10">
-            <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5" />
               <span>الأتمتة ودرع الخصوصية</span>
             </h3>
@@ -274,7 +274,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Auto Clipboard Sync */}
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/5">
               <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <div>
@@ -287,7 +287,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => toggleOption('autoClipboardSync')}
                 aria-label="تبديل المزامنة التلقائية"
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
-                  settings.autoClipboardSync ? 'bg-emerald-500' : 'bg-slate-700'
+                  settings.autoClipboardSync ? 'bg-blue-600' : 'bg-slate-700'
                 }`}
               >
                 <span
@@ -301,7 +301,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Clean Tracking Links */}
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/5">
               <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
                   <ShieldCheck className="w-3.5 h-3.5" />
                 </div>
                 <div>
@@ -314,7 +314,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => toggleOption('cleanTrackingLinks')}
                 aria-label="تبديل درع تنظيف الروابط"
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
-                  settings.cleanTrackingLinks ? 'bg-emerald-500' : 'bg-slate-700'
+                  settings.cleanTrackingLinks ? 'bg-blue-600' : 'bg-slate-700'
                 }`}
               >
                 <span
@@ -341,7 +341,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => toggleOption('requireFileConfirmation')}
                 aria-label="تبديل طلب التأكيد قبل الاستلام"
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
-                  settings.requireFileConfirmation ? 'bg-emerald-500' : 'bg-slate-700'
+                  settings.requireFileConfirmation ? 'bg-blue-600' : 'bg-slate-700'
                 }`}
               >
                 <span
@@ -355,7 +355,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Sensitive Data Shield */}
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/5">
               <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
                   <ShieldCheck className="w-3.5 h-3.5" />
                 </div>
                 <div>
@@ -368,7 +368,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => toggleOption('blockSensitiveAutoSync')}
                 aria-label="تبديل درع حماية البيانات الحساسة"
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
-                  settings.blockSensitiveAutoSync ? 'bg-emerald-500' : 'bg-slate-700'
+                  settings.blockSensitiveAutoSync ? 'bg-blue-600' : 'bg-slate-700'
                 }`}
               >
                 <span
@@ -382,7 +382,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Section 4: History & Vault Management */}
           <div className="space-y-3 pt-3 border-t border-white/10">
-            <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
               <Trash2 className="w-3.5 h-3.5" />
               <span>إدارة الذاكرة والسجل</span>
             </h3>
@@ -399,8 +399,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 {historyCleared ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-emerald-400">تم المسح</span>
+                    <Check className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-blue-400">تم المسح</span>
                   </>
                 ) : (
                   <>
@@ -415,10 +415,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Section 5: App Updates (Otium Ecosystem 3-Tier Failover Updater) */}
           <div className="space-y-3 pt-3 border-t border-white/10">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 font-bold">
                 الإصدار الحالي: v{APP_CURRENT_VERSION}
               </span>
-              <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+              <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>تحديثات التطبيق (منظومة Otium)</span>
               </h3>
@@ -436,7 +436,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={handleCheckUpdate}
-                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all otium-press"
+                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all otium-press"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>التحقق من وجود تحديثات الآن</span>
@@ -445,7 +445,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {isCheckingUpdate && (
                 <div className="text-center py-3 space-y-2 bg-black/30 rounded-xl border border-white/[0.05]">
-                  <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin mx-auto" />
+                  <RefreshCw className="w-5 h-5 text-blue-400 animate-spin mx-auto" />
                   <p className="text-xs text-slate-300 font-medium">جارٍ فحص خوادم التحديثات (GitHub Releases)...</p>
                 </div>
               )}
@@ -468,13 +468,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
 
               {updateResult && updateResult.hasUpdate && (
-                <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 space-y-3">
+                <div className="p-3.5 rounded-xl bg-blue-500/15 border border-blue-500/40 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 font-bold">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/25 text-blue-300 border border-blue-500/40 font-bold">
                       جديد: v{updateResult.latestVersion}
                     </span>
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-300">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
                       <span>يتوفر إصدار أحدث جاهز للتحميل!</span>
                     </div>
                   </div>
@@ -489,7 +489,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => openExternalUrl(updateResult.releaseUrl)}
-                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all otium-press"
+                      className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/30 transition-all otium-press"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>تحميل التحديث المباشر</span>
@@ -507,18 +507,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
 
               {updateResult && !updateResult.hasUpdate && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-300 text-xs flex items-center justify-between">
                   <button
                     type="button"
                     onClick={handleCheckUpdate}
-                    className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/20 transition-colors otium-press"
+                    className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-colors otium-press"
                     title="إعادة الفحص"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                   </button>
                   <div className="flex items-center gap-2">
                     <span>أنت تستخدم أحدث إصدار متاح حالياً (v{APP_CURRENT_VERSION})</span>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <CheckCircle2 className="w-4 h-4 text-blue-400" />
                   </div>
                 </div>
               )}
@@ -526,14 +526,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* Section 6: Protocol & Legal */}
-          <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-xs text-slate-300 space-y-1.5">
-            <div className="flex items-center gap-2 font-semibold text-emerald-400">
+          <div className="p-3.5 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs text-slate-300 space-y-1.5">
+            <div className="flex items-center gap-2 font-semibold text-blue-400">
               <HardDrive className="w-4 h-4" />
-              <span>بروتوكول Otium المباشر — Zero Cloud</span>
+              <span>بروتوكول Otium MESH المباشر — Zero Cloud</span>
             </div>
             <p className="text-slate-400 leading-relaxed text-[11px]">
-              منفذ البث التلقائي: <code className="text-emerald-300 font-mono">UDP 42424</code> • منفذ النقل اللحظي:{' '}
-              <code className="text-emerald-300 font-mono">TCP 42425</code> • التحقق من سلامة البيانات بنظام CRC32.
+              منفذ البث التلقائي: <code className="text-blue-300 font-mono">UDP 42424</code> • منفذ النقل اللحظي:{' '}
+              <code className="text-blue-300 font-mono">TCP 42425</code> • التحقق من سلامة البيانات بنظام CRC32.
             </p>
             <div className="flex items-center gap-1.5 pt-1 text-[10px] text-slate-500">
               <Info className="w-3 h-3" />
@@ -552,7 +552,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all otium-press"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-600/30 transition-all otium-press"
           >
             {isSaved ? (
               <>
