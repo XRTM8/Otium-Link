@@ -60,23 +60,17 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
 
       {/* Circular Radar Graphic Area (Responsive: compact on mobile, expanded on desktop) */}
       <div className="relative w-full max-w-[210px] sm:max-w-[260px] mx-auto aspect-square my-2 flex items-center justify-center">
-        {/* Radar Concentric Rings */}
-        <div className="absolute inset-0 rounded-full border border-emerald-500/10" />
-        <div className="absolute inset-6 sm:inset-8 rounded-full border border-emerald-500/15" />
-        <div className="absolute inset-12 sm:inset-16 rounded-full border border-dashed border-emerald-500/20" />
-        <div className="absolute inset-18 sm:inset-24 rounded-full border border-emerald-500/25" />
-
-        {/* Crosshair Axes */}
-        <div className="absolute inset-x-0 top-1/2 -translate-y-px h-px bg-emerald-500/10" />
-        <div className="absolute inset-y-0 left-1/2 -translate-x-px w-px bg-emerald-500/10" />
+        {/* Soft, serene ambient glow & single clean orbit ring */}
+        <div className="absolute inset-2 sm:inset-4 rounded-full border border-emerald-500/15 shadow-[0_0_50px_-10px_rgba(16,185,129,0.12)]" />
+        <div className="absolute inset-10 sm:inset-14 rounded-full border border-dashed border-emerald-500/10" />
 
         {/* Radar Rotating Sweep Beam */}
         <div
-          className="absolute inset-0 rounded-full pointer-events-none"
+          className="absolute inset-2 sm:inset-4 rounded-full pointer-events-none opacity-40"
           style={{
             background:
-              'conic-gradient(from 0deg, rgba(16, 185, 129, 0.22) 0deg, transparent 65deg, transparent 360deg)',
-            animation: 'radar-sweep 4.5s linear infinite',
+              'conic-gradient(from 0deg, rgba(16, 185, 129, 0.18) 0deg, transparent 60deg, transparent 360deg)',
+            animation: 'radar-sweep 6s linear infinite',
           }}
         />
 

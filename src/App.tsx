@@ -66,7 +66,7 @@ import {
   openExternalUrl,
 } from './core/tauriBridge';
 
-type ActiveTab = 'live' | 'clipboard' | 'transfers' | 'cast';
+type ActiveTab = 'live' | 'cast' | 'vault';
 
 function formatTimestamp(ts: number): string {
   try {
@@ -84,6 +84,7 @@ function formatTimestamp(ts: number): string {
 export const App: React.FC = () => {
   const { isMobile, isDesktop } = useResponsive();
   const [activeTab, setActiveTab] = useState<ActiveTab>('live');
+  const [vaultTab, setVaultTab] = useState<'clipboard' | 'transfers'>('clipboard');
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>(loadSettings());
@@ -793,65 +794,48 @@ export const App: React.FC = () => {
       </header>
 
       {/* ========================================================= */}
-      {/* NAVIGATION TAB BAR */}
+      {/* NAVIGATION TAB BAR (SIMPLIFIED & CALM) */}
       {/* ========================================================= */}
-      <nav className="flex items-center px-3 sm:px-4 pt-2 pb-1 border-b border-white/[0.06] bg-black/25 gap-1.5 sm:gap-2 shrink-0">
+      <nav className="flex items-center px-3 sm:px-4 pt-2 pb-1 border-b border-white/[0.06] bg-black/25 gap-2 shrink-0 justify-center">
         <button
           onClick={() => setActiveTab('live')}
-          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
             activeTab === 'live'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
           <Radio className="w-3.5 h-3.5" />
-          <span>{isMobile ? 'الرادار والنقل' : 'الرادار والنقل المباشر'}</span>
+          <span>{isMobile ? 'الرئيسية' : 'الرئيسية والنقل'}</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('clipboard')}
-          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
-            activeTab === 'clipboard'
+          onClick={() => setActiveTab('cast')}
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
+            activeTab === 'cast'
+              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/15'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          <Tv className="w-3.5 h-3.5 text-purple-400" />
+          <span>{isMobile ? 'العرض' : 'العرض الذكي (Smart Cast)'}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('vault')}
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
+            activeTab === 'vault'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
           <ClipboardList className="w-3.5 h-3.5" />
-          <span>{isMobile ? 'الحافظة' : 'خزينة الحافظة'}</span>
+          <span>{isMobile ? 'الخزينة' : 'السجل والخزينة'}</span>
           {clipboardHistory.length > 0 && (
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
               {clipboardHistory.length}
             </span>
           )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('transfers')}
-          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
-            activeTab === 'transfers'
-              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
-          }`}
-        >
-          <ArrowRightLeft className="w-3.5 h-3.5" />
-          <span>{isMobile ? 'التحويلات' : 'سجل التحويلات'}</span>
-          {transfers.length > 1 && (
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 text-gray-300 font-mono">
-              {transfers.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cast')}
-          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
-            activeTab === 'cast'
-              ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-sm shadow-purple-500/10'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
-          }`}
-        >
-          <Tv className="w-3.5 h-3.5" />
-          <span>{isMobile ? 'العرض' : 'العرض الذكي (Cast)'}</span>
         </button>
       </nav>
 
@@ -1026,11 +1010,41 @@ export const App: React.FC = () => {
         )}
 
         {/* ========================================================= */}
-        {/* TAB 2: CLIPBOARD HISTORY VAULT */}
+        {/* TAB 3: THE VAULT & HISTORY (CLIPBOARD & FILE TRANSFERS) */}
         {/* ========================================================= */}
-        {activeTab === 'clipboard' && (
-          <div key="tab-clipboard" className="animate-otium-enter">
-            <section className="otium-card rounded-2xl p-4 sm:p-5 border border-white/[0.08] space-y-4">
+        {activeTab === 'vault' && (
+          <div key="tab-vault" className="animate-otium-enter space-y-4">
+            {/* Vault Mode Sub-toggle */}
+            <div className="flex items-center gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/10 max-w-sm mx-auto">
+              <button
+                type="button"
+                onClick={() => setVaultTab('clipboard')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all otium-press flex items-center justify-center gap-1.5 ${
+                  vaultTab === 'clipboard'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span>خزينة الحافظة ({clipboardHistory.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setVaultTab('transfers')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all otium-press flex items-center justify-center gap-1.5 ${
+                  vaultTab === 'transfers'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>سجل الملفات ({transfers.length})</span>
+              </button>
+            </div>
+
+            {vaultTab === 'clipboard' && (
+              <section className="otium-card rounded-2xl p-4 sm:p-5 border border-white/[0.08] space-y-4">
               {/* Header & Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -1177,14 +1191,9 @@ export const App: React.FC = () => {
                 )}
               </div>
             </section>
-          </div>
-        )}
+            )}
 
-        {/* ========================================================= */}
-        {/* TAB 3: TRANSFERS & FILES HISTORY */}
-        {/* ========================================================= */}
-        {activeTab === 'transfers' && (
-          <div key="tab-transfers" className="animate-otium-enter">
+            {vaultTab === 'transfers' && (
             <section className="otium-card rounded-2xl p-4 sm:p-5 border border-white/[0.08] space-y-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
@@ -1303,11 +1312,12 @@ export const App: React.FC = () => {
                 ))}
               </div>
             </section>
+            )}
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* TAB 4: SMART CAST & PRESENTATION (CLASSROOM & SMART BOARD) */}
+        {/* TAB 2: SMART CAST & PRESENTATION (CLASSROOM & SMART BOARD) */}
         {/* ========================================================= */}
         {activeTab === 'cast' && (
           <div key="tab-cast" className="animate-otium-enter">
