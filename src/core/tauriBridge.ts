@@ -239,6 +239,7 @@ export interface NativeListenersConfig {
   onFileReceived: (payload: { name: string; path: string; size: number; sender: string; verified?: boolean }) => void;
   onFileProgress?: (payload: { name: string; transferred: number; total: number; sender: string }) => void;
   onFileError?: (payload: { name: string; sender: string; error: string }) => void;
+  onRemoteCastRequested?: (payload: { action: string; url: string; pin: string; sender: string }) => void;
 }
 
 export async function setupNativeListeners(config: NativeListenersConfig): Promise<() => void> {
@@ -340,6 +341,16 @@ export async function setupNativeListeners(config: NativeListenersConfig): Promi
         }
       );
       unlisteners.push(unlistenErr);
+    }
+
+    if (config.onRemoteCastRequested) {
+      const unlistenCast = await listen<{ action: string; url: string; pin: string; sender: string }>(
+        'otium-link://remote-cast-requested',
+        (event) => {
+          config.onRemoteCastRequested!(event.payload);
+        }
+      );
+      unlisteners.push(unlistenCast);
     }
 
     return () => {
@@ -469,6 +480,53 @@ export async function broadcastCastMessage(text: string, urgent: boolean = true)
     await invoke('broadcast_cast_message', { text, urgent });
     return true;
   } catch {
+    return false;
+  }
+}
+
+export async function sendCastDraw(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  color: string,
+  size: number = 3.0,
+  is_end: boolean = false
+): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('send_cast_draw', { x0, y0, x1, y1, color, size, is_end });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearCastCanvas(): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('clear_cast_canvas');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function launchRemoteCast(
+  targetIp: string,
+  targetPort: number,
+  url: string,
+  pin: string
+): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('launch_remote_cast', { targetIp, targetPort, url, pin });
+    return true;
+  } catch (err) {
+    console.error('Failed to launch remote cast:', err);
     return false;
   }
 }

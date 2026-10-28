@@ -235,6 +235,40 @@ fn clear_cast_canvas(state: tauri::State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn send_cast_draw(
+    state: tauri::State<'_, AppState>,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    color: String,
+    size: f32,
+    is_end: bool,
+) -> Result<(), String> {
+    state.cast.broadcast_draw(crate::cast::DrawPayload {
+        x0,
+        y0,
+        x1,
+        y1,
+        color,
+        size,
+        is_end,
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn launch_remote_cast(
+    state: tauri::State<'_, AppState>,
+    target_ip: String,
+    target_port: u16,
+    url: String,
+    pin: String,
+) -> Result<(), String> {
+    state.network.send_remote_cast_command(&target_ip, target_port, &url, &pin)
+}
+
 fn resolve_device_name() -> String {
     env::var("COMPUTERNAME")
         .or_else(|_| env::var("HOSTNAME"))
@@ -347,7 +381,9 @@ pub fn run() {
             set_cast_slides,
             update_cast_laser,
             broadcast_cast_message,
-            clear_cast_canvas
+            clear_cast_canvas,
+            send_cast_draw,
+            launch_remote_cast
         ])
         .run(tauri::generate_context!())
         .expect("error while running otium link");

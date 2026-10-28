@@ -23,6 +23,11 @@ import {
   Smartphone,
   Sparkles,
   Maximize2,
+  PenTool,
+  Eraser,
+  Clock,
+  Pause,
+  Sun,
 } from 'lucide-react';
 import {
   CastInfo,
@@ -35,6 +40,8 @@ import {
   updateCastLaser,
   broadcastCastMessage,
   openExternalUrl,
+  sendCastDraw,
+  clearCastCanvas,
 } from '../core/tauriBridge';
 import { convertPdfToSlides } from '../core/pdfSlideConverter';
 
@@ -60,6 +67,13 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedMdns, setCopiedMdns] = useState(false);
   const [isClickerActive, setIsClickerActive] = useState(true);
+
+  // Screen WakeLock State
+  const [isWakeLockActive, setIsWakeLockActive] = useState(false);
+
+  // Lecture Stopwatch State
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
 
   // QR Code State
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -100,22 +114,81 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
   // Urgent Broadcast Message State
   const [urgentMsg, setUrgentMsg] = useState('');
 
-  // Laser Pointer Trackpad State
+  // Laser vs Pen Annotation Mode State
+  const [interactionMode, setInteractionMode] = useState<'laser' | 'pen'>('laser');
+  const [penColor, setPenColor] = useState('#ef4444');
   const trackpadRef = useRef<HTMLDivElement>(null);
   const [isLaserActive, setIsLaserActive] = useState(false);
   const [laserPos, setLaserPos] = useState({ x: 0.5, y: 0.5 });
+  const lastDrawPos = useRef<{ x: number; y: number } | null>(null);
 
   // Slide Image Input
   const slideImageInputRef = useRef<HTMLInputElement>(null);
 
+  // Initial Cast info fetch
   useEffect(() => {
     fetchCastInfo().then((info) => {
       setCastInfo(info);
       if (info.is_running) {
         setCurrentSlideIdx(info.current_slide);
+        setIsTimerRunning(true);
       }
     });
   }, []);
+
+  // Screen Wake Lock API to prevent phone screen dimming/sleeping during classroom presentation
+  useEffect(() => {
+    let wakeLockSentinel: any = null;
+    const requestWake = async () => {
+      if (castInfo.is_running && typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+        try {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+          setIsWakeLockActive(true);
+        } catch {
+          setIsWakeLockActive(false);
+        }
+      }
+    };
+
+    if (castInfo.is_running) {
+      requestWake();
+    } else {
+      setIsWakeLockActive(false);
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && castInfo.is_running) {
+        requestWake();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release().catch(() => {});
+      }
+    };
+  }, [castInfo.is_running]);
+
+  // Stopwatch Timer for Presentations
+  useEffect(() => {
+    let interval: any = null;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setTimerSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning]);
+
+  const formatTimer = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Generate QR Code when running
   useEffect(() => {
@@ -151,6 +224,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
       if (castInfo.is_running) {
         await stopCastServer();
         setCastInfo((prev) => ({ ...prev, is_running: false, connected_viewers: 0 }));
+        setIsTimerRunning(false);
         showToast('info', 'تم إيقاف العرض على السبورة الذكية');
       } else {
         const pinCode = enablePin
@@ -158,6 +232,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
           : '';
         const info = await startCastServer(pinCode);
         setCastInfo(info);
+        setIsTimerRunning(true);
         // Upload initial slides
         await setCastSlides(slides);
         showToast('success', 'تم بدء العرض الذكي بنجاح!', `الرابط: ${info.url}`);
@@ -351,14 +426,40 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
     reader.readAsDataURL(file);
   };
 
-  // Virtual Laser Trackpad Handlers
+  // Virtual Laser & Pen Trackpad Handlers
   const handleTrackpadMove = (clientX: number, clientY: number) => {
     if (!trackpadRef.current) return;
     const rect = trackpadRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    setLaserPos({ x, y });
-    updateCastLaser(x, y, true);
+
+    if (interactionMode === 'laser') {
+      setLaserPos({ x, y });
+      updateCastLaser(x, y, true);
+    } else {
+      // Pen Annotation Drawing
+      if (lastDrawPos.current) {
+        sendCastDraw(lastDrawPos.current.x, lastDrawPos.current.y, x, y, penColor, 3.5, false);
+      }
+      lastDrawPos.current = { x, y };
+    }
+  };
+
+  const handleTrackpadEnd = () => {
+    if (interactionMode === 'laser') {
+      setIsLaserActive(false);
+      updateCastLaser(laserPos.x, laserPos.y, false);
+    } else {
+      if (lastDrawPos.current) {
+        sendCastDraw(lastDrawPos.current.x, lastDrawPos.current.y, lastDrawPos.current.x, lastDrawPos.current.y, penColor, 3.5, true);
+      }
+      lastDrawPos.current = null;
+    }
+  };
+
+  const handleClearDrawings = async () => {
+    await clearCastCanvas();
+    showToast('info', 'تم مسح التأشيرات والرسومات من السبورة');
   };
 
   const handleBroadcastUrgent = async () => {
@@ -398,17 +499,39 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
                     <span>البث مباشر</span>
                   </span>
                 )}
+                {isWakeLockActive && (
+                  <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30" title="شاشة الهاتف ستبقى مضيئة طوال فترة العرض">
+                    <Sun className="w-3 h-3 text-amber-400 animate-spin" />
+                    <span>الشاشة مضيئة</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
                 {castInfo.is_running
-                  ? 'السبورة تستقبل البث الآن — يمكنك التنقل بين الشرائح والتحكم بالليزر'
+                  ? 'السبورة تستقبل البث الآن — يمكنك التنقل بين الشرائح والتحكم بالليزر والرسم التفاعلي'
                   : 'اعرض أبحاثك وشرائحك على شاشة القاعة بدون أسلاك وبدون إنترنت'}
               </p>
             </div>
           </div>
 
-          {/* Action Trigger Button */}
+          {/* Action Trigger Buttons */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Lecture Stopwatch Pill */}
+            {castInfo.is_running && (
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs font-mono font-bold text-white">
+                <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{formatTimer(timerSeconds)}</span>
+                <button
+                  type="button"
+                  onClick={() => setIsTimerRunning(!isTimerRunning)}
+                  className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white"
+                  title={isTimerRunning ? 'إيقاف المؤقت مؤقتاً' : 'استئناف المؤقت'}
+                >
+                  {isTimerRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-white" />}
+                </button>
+              </div>
+            )}
+
             {!castInfo.is_running && (
               <button
                 type="button"
@@ -519,18 +642,18 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
           </div>
         )}
 
-        {/* Presenter Clicker & Volume Keys Mode Banner */}
+        {/* Presenter Clicker Mode Banner */}
         {castInfo.is_running && (
-          <div className="mt-3 pt-3 border-t border-white/[0.05] flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-3 pt-3 border-t border-white/[0.05] flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
             <div className="flex items-center gap-2">
               <Smartphone className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>
-                <strong>وضع جهاز التحكم (Clicker):</strong> يمكنك استخدام أزرار الكيبورد (الأسهم / Space) أو ريموت البلوتوث للتنقل بين الشرائح مع اهتزاز لمسي.
+                <strong>جهاز التحكم (Clicker):</strong> استخدم أزرار الكيبورد (الأسهم / Space) أو ريموت البلوتوث للتنقل مع اهتزاز لمسي.
               </span>
             </div>
             <button
               onClick={() => setIsClickerActive(!isClickerActive)}
-              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-colors ${
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
                 isClickerActive
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                   : 'bg-white/5 text-slate-400 border border-white/10'
@@ -719,20 +842,82 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
           </div>
         </section>
 
-        {/* Laser Pointer & Quick Announcement (5 cols on desktop) */}
+        {/* Laser & Pen Interactive Controller (5 cols on desktop) */}
         <div className={`${isMobile ? '' : 'col-span-5'} space-y-4`}>
-          {/* Virtual Laser Trackpad */}
+          {/* Dual Laser / Pen Trackpad */}
           <section className="otium-card rounded-2xl p-4 sm:p-5 border border-white/[0.08] space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Crosshair className="w-4 h-4 text-rose-400" />
-                <h3 className="text-xs sm:text-sm font-bold text-white">مؤشر الليزر الافتراضي</h3>
+                {interactionMode === 'laser' ? (
+                  <Crosshair className="w-4 h-4 text-rose-400" />
+                ) : (
+                  <PenTool className="w-4 h-4 text-emerald-400" />
+                )}
+                <h3 className="text-xs sm:text-sm font-bold text-white">
+                  {interactionMode === 'laser' ? 'مؤشر الليزر الافتراضي' : 'قلم التأشير والرسم الحي'}
+                </h3>
               </div>
-              <span className="text-[10px] text-slate-400">تحكم لمسي حي</span>
+
+              {/* Mode Switcher */}
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setInteractionMode('laser')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    interactionMode === 'laser'
+                      ? 'bg-rose-500 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ليزر
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInteractionMode('pen')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    interactionMode === 'pen'
+                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  قلم
+                </button>
+              </div>
             </div>
 
+            {/* Pen Options (Colors and Clear) */}
+            {interactionMode === 'pen' && (
+              <div className="flex items-center justify-between p-2 rounded-xl bg-black/30 border border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400">لون القلم:</span>
+                  {['#ef4444', '#10b981', '#f59e0b', '#3b82f6'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setPenColor(c)}
+                      className={`w-5 h-5 rounded-full transition-transform ${
+                        penColor === c ? 'scale-125 ring-2 ring-white' : 'opacity-70 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleClearDrawings}
+                  className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-semibold transition-colors"
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                  <span>مسح الرسم</span>
+                </button>
+              </div>
+            )}
+
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              اسحب إصبعك داخل هذه المنطقة، وستتحرك نقطة ليزر حمراء ساطعة على السبورة الذكية في الوقت الحقيقي!
+              {interactionMode === 'laser'
+                ? 'اسحب إصبعك داخل هذه المنطقة، وستتحرك نقطة ليزر حمراء ساطعة على السبورة الذكية في الوقت الحقيقي!'
+                : 'ارسم أو ضع دوائر وتأشيرات بإصبعك، وستظهر خطوط الرسم فوراً على شاشة السبورة أمام الطلاب!'}
             </p>
 
             {/* Touchpad Area */}
@@ -743,12 +928,9 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
                 handleTrackpadMove(e.clientX, e.clientY);
               }}
               onMouseMove={(e) => {
-                if (isLaserActive) handleTrackpadMove(e.clientX, e.clientY);
+                if (isLaserActive || lastDrawPos.current) handleTrackpadMove(e.clientX, e.clientY);
               }}
-              onMouseUp={() => {
-                setIsLaserActive(false);
-                updateCastLaser(laserPos.x, laserPos.y, false);
-              }}
+              onMouseUp={handleTrackpadEnd}
               onTouchStart={(e) => {
                 setIsLaserActive(true);
                 if (e.touches[0]) handleTrackpadMove(e.touches[0].clientX, e.touches[0].clientY);
@@ -756,18 +938,23 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
               onTouchMove={(e) => {
                 if (e.touches[0]) handleTrackpadMove(e.touches[0].clientX, e.touches[0].clientY);
               }}
-              onTouchEnd={() => {
-                setIsLaserActive(false);
-                updateCastLaser(laserPos.x, laserPos.y, false);
-              }}
-              className="relative w-full aspect-video rounded-xl bg-black/60 border-2 border-dashed border-rose-500/30 hover:border-rose-500/60 transition-colors cursor-crosshair flex items-center justify-center overflow-hidden touch-none"
+              onTouchEnd={handleTrackpadEnd}
+              className={`relative w-full aspect-video rounded-xl bg-black/60 border-2 border-dashed transition-colors cursor-crosshair flex items-center justify-center overflow-hidden touch-none ${
+                interactionMode === 'laser'
+                  ? 'border-rose-500/30 hover:border-rose-500/60'
+                  : 'border-emerald-500/30 hover:border-emerald-500/60'
+              }`}
             >
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-30">
-                <Crosshair className="w-8 h-8 text-rose-400" />
+                {interactionMode === 'laser' ? (
+                  <Crosshair className="w-8 h-8 text-rose-400" />
+                ) : (
+                  <PenTool className="w-8 h-8 text-emerald-400" />
+                )}
               </div>
 
               {/* Cursor Representation */}
-              {isLaserActive && (
+              {isLaserActive && interactionMode === 'laser' && (
                 <div
                   className="absolute w-4 h-4 rounded-full bg-rose-500 shadow-lg shadow-rose-500 pointer-events-none -translate-x-1/2 -translate-y-1/2"
                   style={{ left: `${laserPos.x * 100}%`, top: `${laserPos.y * 100}%` }}
@@ -775,7 +962,9 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
               )}
 
               <span className="text-[11px] text-slate-500 pointer-events-none select-none">
-                {isLaserActive ? 'الليزر نشط على السبورة 🔴' : 'المس واسحب لتحريك الليزر'}
+                {interactionMode === 'laser'
+                  ? isLaserActive ? 'الليزر نشط على السبورة 🔴' : 'المس واسحب لتحريك الليزر'
+                  : 'المس واسحب للرسم الحي على السبورة ✍️'}
               </span>
             </div>
           </section>

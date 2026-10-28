@@ -60,6 +60,10 @@ import {
   transmitFile,
   openDownloadsFolder,
   openLocalFile,
+  launchRemoteCast,
+  startCastServer,
+  fetchCastInfo,
+  openExternalUrl,
 } from './core/tauriBridge';
 
 type ActiveTab = 'live' | 'clipboard' | 'transfers' | 'cast';
@@ -473,6 +477,10 @@ export const App: React.FC = () => {
           ...prev,
         ]);
       },
+      onRemoteCastRequested: async (cmd) => {
+        showToast('info', `طلب عرض شاشة من ${cmd.sender}`, 'جاري فتح شاشة العرض...');
+        await openExternalUrl(cmd.url);
+      },
     }).then((cleanup) => {
       cleanupListeners = cleanup;
     });
@@ -568,6 +576,26 @@ export const App: React.FC = () => {
     setSelectedPeerId(newPeer.id);
     showToast('success', 'تم الاقتران المباشر بنجاح', `${newPeer.name} (${newPeer.ip})`);
   };
+
+  const handleLaunchRemoteCast = useCallback(
+    async (targetPeer: Device) => {
+      try {
+        let info = await fetchCastInfo();
+        if (!info.is_running) {
+          info = await startCastServer();
+        }
+        const ok = await launchRemoteCast(targetPeer.ip, targetPeer.port, info.url, info.pin);
+        if (ok) {
+          showToast('success', `تم إرسال أمر العرض إلى ${targetPeer.name}`, 'شاشة العرض ستفتح تلقائياً');
+        } else {
+          showToast('warning', `تعذر إرسال أمر العرض إلى ${targetPeer.name}`);
+        }
+      } catch (err: any) {
+        showToast('warning', 'خطأ في تشغيل العرض عن بعد', String(err));
+      }
+    },
+    [showToast]
+  );
 
   const activePeers = devices.filter((d) => !d.isSelf);
   const selfDevice = devices.find((d) => d.isSelf);
@@ -849,6 +877,7 @@ export const App: React.FC = () => {
                     playDropChime(appSettings.audioFeedback, appSettings.soundVolume);
                   }}
                   onOpenDirectConnect={() => setIsDirectConnectOpen(true)}
+                  onLaunchRemoteCast={handleLaunchRemoteCast}
                 />
 
                 {/* Quick Info Badge on Desktop */}

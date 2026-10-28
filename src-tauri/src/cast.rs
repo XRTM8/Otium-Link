@@ -39,6 +39,17 @@ pub struct LaserPayload {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DrawPayload {
+    pub x0: f32,
+    pub y0: f32,
+    pub x1: f32,
+    pub y1: f32,
+    pub color: String,
+    pub size: f32,
+    pub is_end: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MessagePayload {
     pub text: String,
     pub urgent: bool,
@@ -70,7 +81,7 @@ pub struct CastManager {
     next_client_id: Arc<AtomicU64>,
 }
 
-/// Resolves the active private Wi-Fi / LAN IP without internet queries
+/// Resolves the active private Wi-Fi / LAN IP without external internet queries
 pub fn resolve_local_ip() -> String {
     if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
         if socket.connect("192.168.1.1:80").is_ok() || socket.connect("10.0.0.1:80").is_ok() {
@@ -131,16 +142,7 @@ impl CastManager {
             });
         }
 
-        let assigned_pin = pin.unwrap_or_else(|| {
-            // Generate clean 4-digit PIN
-            let seed = (std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-                % 9000
-                + 1000) as u32;
-            seed.to_string()
-        });
+        let assigned_pin = pin.unwrap_or_default();
 
         inner.pin = assigned_pin.clone();
         inner.is_running = true;
@@ -214,9 +216,26 @@ impl CastManager {
         }
     }
 
-    pub fn set_slides(&self, slides: Vec<SlidePayload>) {
+    pub fn set_slides(&self, mut slides: Vec<SlidePayload>) {
         let mut inner = self.inner.lock().unwrap();
         if !slides.is_empty() {
+            // Guard against memory exhaustion DOS
+            if slides.len() > 150 {
+                slides.truncate(150);
+            }
+            for slide in &mut slides {
+                if slide.title.len() > 250 {
+                    slide.title.truncate(250);
+                }
+                if slide.text.len() > 30000 {
+                    slide.text.truncate(30000);
+                }
+            }
+            let total = slides.len();
+            for (idx, slide) in slides.iter_mut().enumerate() {
+                slide.index = idx;
+                slide.total = total;
+            }
             inner.slides = slides;
             inner.current_slide = 0;
             self.broadcast_event_locked(&mut inner, "slide");
@@ -235,6 +254,12 @@ impl CastManager {
         let mut inner = self.inner.lock().unwrap();
         inner.laser = LaserPayload { x, y, active };
         self.broadcast_event_locked(&mut inner, "laser");
+    }
+
+    pub fn broadcast_draw(&self, payload: DrawPayload) {
+        let mut inner = self.inner.lock().unwrap();
+        let json = serde_json::to_string(&payload).unwrap_or_default();
+        self.broadcast_raw_locked(&mut inner, "draw", &json);
     }
 
     pub fn broadcast_message(&self, text: String, _urgent: bool) {
@@ -314,7 +339,11 @@ impl CastManager {
 
         if method == "GET" && (path == "/" || path == "/cast" || path.starts_with("/?")) {
             // Serve the self-contained Smart Board Receiver web application
-            let html = generate_smart_board_html();
+            let pin_expected = {
+                let inner = self.inner.lock().unwrap();
+                inner.pin.clone()
+            };
+            let html = generate_smart_board_html(!pin_expected.is_empty());
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n{}",
                 html.len(),
@@ -326,6 +355,32 @@ impl CastManager {
         }
 
         if method == "GET" && path.starts_with("/events") {
+            // Verify PIN security if configured
+            let pin_expected = {
+                let inner = self.inner.lock().unwrap();
+                inner.pin.clone()
+            };
+
+            if !pin_expected.is_empty() {
+                let mut authorized = false;
+                if let Some(query) = path.split('?').nth(1) {
+                    for pair in query.split('&') {
+                        let mut kv = pair.split('=');
+                        if kv.next() == Some("pin") && kv.next() == Some(&pin_expected) {
+                            authorized = true;
+                            break;
+                        }
+                    }
+                }
+
+                if !authorized {
+                    let unauthorized = "HTTP/1.1 401 UNAUTHORIZED\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 25\r\n\r\n{\"error\":\"invalid_pin\"}";
+                    let _ = stream.write_all(unauthorized.as_bytes());
+                    let _ = stream.flush();
+                    return;
+                }
+            }
+
             // Server-Sent Events (SSE) Stream
             let _ = stream.set_read_timeout(None);
             let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
@@ -376,17 +431,18 @@ impl CastManager {
 }
 
 /// Generates the self-contained, responsive, 100% offline Smart Board Presentation Receiver
-fn generate_smart_board_html() -> String {
-    r#"<!DOCTYPE html>
+fn generate_smart_board_html(has_pin_protection: bool) -> String {
+    let pin_req_str = if has_pin_protection { "true" } else { "false" };
+
+    format!(r#"<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Otium Smart Board | شاشة العرض الذكية</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-    body {
+    * {{ box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }}
+    body {{
       background-color: #050811;
       color: #f0f6fc;
       font-family: system-ui, -apple-system, 'Tajawal', sans-serif;
@@ -396,8 +452,8 @@ fn generate_smart_board_html() -> String {
       display: flex;
       flex-direction: column;
       position: relative;
-    }
-    header {
+    }}
+    header {{
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -407,27 +463,27 @@ fn generate_smart_board_html() -> String {
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       z-index: 50;
       transition: opacity 0.3s ease;
-    }
-    header.hidden-ui { opacity: 0; pointer-events: none; }
-    .logo-badge {
+    }}
+    header.hidden-ui {{ opacity: 0; pointer-events: none; }}
+    .logo-badge {{
       display: flex;
       align-items: center;
       gap: 10px;
       font-weight: 800;
       font-size: 16px;
       letter-spacing: -0.5px;
-    }
-    .status-dot {
+    }}
+    .status-dot {{
       width: 10px;
       height: 10px;
       border-radius: 50%;
       background: #10b981;
       box-shadow: 0 0 12px #10b981;
       animation: pulse 2s infinite;
-    }
-    @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
-    .controls-group { display: flex; align-items: center; gap: 12px; }
-    .btn {
+    }}
+    @keyframes pulse {{ 0% {{ opacity: 0.6; }} 50% {{ opacity: 1; }} 100% {{ opacity: 0.6; }} }}
+    .controls-group {{ display: flex; align-items: center; gap: 12px; }}
+    .btn {{
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid rgba(255, 255, 255, 0.12);
       color: #f0f6fc;
@@ -440,9 +496,9 @@ fn generate_smart_board_html() -> String {
       align-items: center;
       gap: 6px;
       transition: all 0.2s;
-    }
-    .btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(16, 185, 129, 0.4); }
-    main {
+    }}
+    .btn:hover {{ background: rgba(255, 255, 255, 0.12); border-color: rgba(16, 185, 129, 0.4); }}
+    main {{
       flex: 1;
       position: relative;
       display: flex;
@@ -450,8 +506,8 @@ fn generate_smart_board_html() -> String {
       justify-content: center;
       padding: 24px;
       overflow: hidden;
-    }
-    #slideContainer {
+    }}
+    #slideContainer {{
       max-width: 92%;
       max-height: 88%;
       width: auto;
@@ -467,32 +523,33 @@ fn generate_smart_board_html() -> String {
       padding: 40px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
       transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
-    }
-    #slideImage {
+      z-index: 10;
+    }}
+    #slideImage {{
       max-width: 100%;
       max-height: 75vh;
       border-radius: 16px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       object-fit: contain;
       display: none;
-    }
-    #slideTitle {
+    }}
+    #slideTitle {{
       font-size: 38px;
       font-weight: 800;
       color: #ffffff;
       margin-bottom: 20px;
       text-align: center;
       line-height: 1.3;
-    }
-    #slideText {
+    }}
+    #slideText {{
       font-size: 22px;
       color: #cbd5e1;
       line-height: 1.8;
       text-align: center;
       max-width: 900px;
       white-space: pre-wrap;
-    }
-    #slideNumber {
+    }}
+    #slideNumber {{
       position: absolute;
       bottom: 16px;
       left: 24px;
@@ -504,24 +561,33 @@ fn generate_smart_board_html() -> String {
       padding: 4px 12px;
       border-radius: 9999px;
       border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-    /* Virtual Laser Pointer Dot */
-    #laserDot {
+    }}
+    /* Live Drawing Annotation Canvas */
+    #drawCanvas {{
       position: absolute;
-      width: 18px;
-      height: 18px;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 40;
+    }}
+    /* Virtual Laser Pointer Dot */
+    #laserDot {{
+      position: absolute;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: #ff1100;
-      box-shadow: 0 0 14px 4px #ff1100, 0 0 30px 10px rgba(255, 17, 0, 0.6);
+      box-shadow: 0 0 16px 6px #ff1100, 0 0 35px 12px rgba(255, 17, 0, 0.7);
       pointer-events: none;
       z-index: 100;
       transform: translate(-50%, -50%);
       transition: opacity 0.15s ease, transform 0.05s ease-out;
       opacity: 0;
-    }
-    #laserDot.active { opacity: 1; }
+    }}
+    #laserDot.active {{ opacity: 1; }}
     /* Urgent Broadcast Banner */
-    #alertBanner {
+    #alertBanner {{
       position: absolute;
       top: 30px;
       left: 50%;
@@ -536,13 +602,49 @@ fn generate_smart_board_html() -> String {
       z-index: 90;
       transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       border: 1px solid rgba(255,255,255,0.2);
-    }
-    #alertBanner.show { transform: translateX(-50%) translateY(0); }
+    }}
+    #alertBanner.show {{ transform: translateX(-50%) translateY(0); }}
+    /* PIN Prompt Modal */
+    #pinModal {{
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(20px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }}
+    .pin-box {{
+      background: #0f172a;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 36px 32px;
+      border-radius: 28px;
+      max-width: 380px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+    }}
+    .pin-input {{
+      width: 100%;
+      padding: 14px;
+      margin: 18px 0;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.5);
+      color: #10b981;
+      font-size: 24px;
+      font-family: monospace;
+      letter-spacing: 8px;
+      text-align: center;
+      outline: none;
+    }}
   </style>
 </head>
 <body>
   <div id="laserDot"></div>
   <div id="alertBanner"></div>
+  <canvas id="drawCanvas"></canvas>
 
   <header id="headerBar">
     <div class="logo-badge">
@@ -551,6 +653,9 @@ fn generate_smart_board_html() -> String {
     </div>
 
     <div class="controls-group">
+      <button class="btn" onclick="clearLocalCanvas()">
+        <span>🧹 مسح الشاشة</span>
+      </button>
       <button class="btn" id="btnFullscreen" onclick="toggleFullscreen()">
         <span>⛶ ملء الشاشة الكامل</span>
       </button>
@@ -569,7 +674,20 @@ fn generate_smart_board_html() -> String {
     </div>
   </main>
 
+  <div id="pinModal">
+    <div class="pin-box">
+      <div style="font-size: 40px; margin-bottom: 12px;">🔒</div>
+      <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 8px;">جلسة عرض محمية</h2>
+      <p style="font-size: 13px; color: #94a3b8;">أدخل رمز PIN الظاهر على شاشة المحاضر للبدء:</p>
+      <input type="text" id="pinInput" class="pin-input" placeholder="1234" maxlength="6" />
+      <button class="btn" style="width: 100%; justify-content: center; background: #10b981; color: #022c22; font-weight: 800; padding: 12px;" onclick="submitPin()">
+        اتصال بالعرض
+      </button>
+    </div>
+  </div>
+
   <script>
+    const pinRequired = {pin_req_str};
     const laserDot = document.getElementById('laserDot');
     const slideContainer = document.getElementById('slideContainer');
     const slideImage = document.getElementById('slideImage');
@@ -578,82 +696,144 @@ fn generate_smart_board_html() -> String {
     const slideNumber = document.getElementById('slideNumber');
     const alertBanner = document.getElementById('alertBanner');
     const headerBar = document.getElementById('headerBar');
+    const drawCanvas = document.getElementById('drawCanvas');
+    const ctx = drawCanvas.getContext('2d');
+    const pinModal = document.getElementById('pinModal');
+    const pinInput = document.getElementById('pinInput');
+
+    function resizeCanvas() {{
+      drawCanvas.width = window.innerWidth;
+      drawCanvas.height = window.innerHeight;
+    }}
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function clearLocalCanvas() {{
+      ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    }}
 
     let uiHidden = false;
-    function toggleUI() {
+    function toggleUI() {{
       uiHidden = !uiHidden;
       headerBar.classList.toggle('hidden-ui', uiHidden);
-    }
+    }}
 
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else {
-        document.exitFullscreen().catch(() => {});
-      }
-    }
+    function toggleFullscreen() {{
+      if (!document.fullscreenElement) {{
+        document.documentElement.requestFullscreen().catch(() => {{}});
+      }} else {{
+        document.exitFullscreen().catch(() => {{}});
+      }}
+    }}
 
-    // Connect to Server-Sent Events (SSE) Stream
-    function initEventStream() {
-      const sse = new EventSource('/events');
+    // Keyboard Shortcuts for Presenters and Teachers
+    window.addEventListener('keydown', (e) => {{
+      if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+      if (e.key === 'h' || e.key === 'H') toggleUI();
+      if (e.key === 'c' || e.key === 'C') clearLocalCanvas();
+    }});
 
-      sse.addEventListener('slide', (e) => {
-        try {
+    function submitPin() {{
+      const pin = pinInput.value.trim();
+      if (pin) {{
+        sessionStorage.setItem('otium_cast_pin', pin);
+        pinModal.style.display = 'none';
+        initEventStream(pin);
+      }}
+    }}
+
+    function initEventStream(overridePin) {{
+      const savedPin = overridePin || sessionStorage.getItem('otium_cast_pin') || '';
+      const streamUrl = savedPin ? `/events?pin=${{encodeURIComponent(savedPin)}}` : '/events';
+      const sse = new EventSource(streamUrl);
+
+      sse.addEventListener('slide', (e) => {{
+        try {{
           const data = JSON.parse(e.data);
           slideContainer.style.opacity = '0';
-          setTimeout(() => {
+          setTimeout(() => {{
             slideTitle.innerText = data.title || '';
             slideText.innerText = data.text || '';
-            slideNumber.innerText = `${data.index + 1} / ${data.total}`;
+            slideNumber.innerText = `${{data.index + 1}} / ${{data.total}}`;
 
-            if (data.image_data) {
+            if (data.image_data) {{
               slideImage.src = data.image_data;
               slideImage.style.display = 'block';
               if (!data.text) slideText.style.display = 'none';
-            } else {
+            }} else {{
               slideImage.style.display = 'none';
               slideText.style.display = 'block';
-            }
+            }}
             slideContainer.style.opacity = '1';
-          }, 150);
-        } catch (err) {
+          }}, 150);
+        }} catch (err) {{
           console.error('Slide parse error', err);
-        }
-      });
+        }}
+      }});
 
-      sse.addEventListener('laser', (e) => {
-        try {
+      sse.addEventListener('laser', (e) => {{
+        try {{
           const laser = JSON.parse(e.data);
-          if (laser.active) {
+          if (laser.active) {{
             laserDot.classList.add('active');
-            laserDot.style.left = `${laser.x * 100}%`;
-            laserDot.style.top = `${laser.y * 100}%`;
-          } else {
+            laserDot.style.left = `${{laser.x * 100}}%`;
+            laserDot.style.top = `${{laser.y * 100}}%`;
+          }} else {{
             laserDot.classList.remove('active');
-          }
-        } catch (_) {}
-      });
+          }}
+        }} catch (_) {{}}
+      }});
 
-      sse.addEventListener('message', (e) => {
-        try {
+      sse.addEventListener('draw', (e) => {{
+        try {{
+          const d = JSON.parse(e.data);
+          const w = drawCanvas.width;
+          const h = drawCanvas.height;
+          ctx.strokeStyle = d.color || '#ef4444';
+          ctx.lineWidth = (d.size || 3.0) * (w / 1200);
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(d.x0 * w, d.y0 * h);
+          ctx.lineTo(d.x1 * w, d.y1 * h);
+          ctx.stroke();
+        }} catch (_) {{}}
+      }});
+
+      sse.addEventListener('clear', () => {{
+        clearLocalCanvas();
+      }});
+
+      sse.addEventListener('message', (e) => {{
+        try {{
           const msg = JSON.parse(e.data);
-          if (msg.text && msg.text.trim()) {
+          if (msg.text && msg.text.trim()) {{
             alertBanner.innerText = msg.text;
             alertBanner.classList.add('show');
             setTimeout(() => alertBanner.classList.remove('show'), 6000);
-          }
-        } catch (_) {}
-      });
+          }}
+        }} catch (_) {{}}
+      }});
 
-      sse.onerror = () => {
-        console.warn('SSE disconnected, auto-reconnecting...');
-      };
-    }
+      sse.onerror = (err) => {{
+        console.warn('SSE disconnected or unauthorized', err);
+        if (pinRequired && !savedPin) {{
+          pinModal.style.display = 'flex';
+          pinInput.focus();
+        }}
+      }};
+    }}
 
-    window.addEventListener('DOMContentLoaded', initEventStream);
+    window.addEventListener('DOMContentLoaded', () => {{
+      const savedPin = sessionStorage.getItem('otium_cast_pin');
+      if (pinRequired && !savedPin) {{
+        pinModal.style.display = 'flex';
+        pinInput.focus();
+      }} else {{
+        initEventStream(savedPin);
+      }}
+    }});
   </script>
 </body>
-</html>
-"#
-    .to_string()
+</html>"#, pin_req_str = pin_req_str)
 }

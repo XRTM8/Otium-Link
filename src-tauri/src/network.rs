@@ -51,6 +51,14 @@ pub struct FileHeaderPayload {
     pub crc32: Option<u32>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RemoteCastPayload {
+    pub action: String,
+    pub url: String,
+    pub pin: String,
+    pub sender: String,
+}
+
 pub fn is_dangerous_unicode_char(c: char) -> bool {
     matches!(
         c,
@@ -783,6 +791,17 @@ impl NetworkManager {
                                     }
                                 }
                             }
+                            3 => {
+                                // 3 = Remote Cast Launch Notification (capped to 16KB)
+                                if payload_len <= 16 * 1024 {
+                                    let mut payload = vec![0u8; payload_len];
+                                    if stream.read_exact(&mut payload).is_ok() {
+                                        if let Ok(cmd) = serde_json::from_slice::<RemoteCastPayload>(&payload) {
+                                            let _ = app_clone.emit("otium-link://remote-cast-requested", cmd);
+                                        }
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                     });
@@ -938,6 +957,36 @@ impl NetworkManager {
         stream.write_all(&final_crc.to_be_bytes()).map_err(|e| format!("CRC trailer error: {}", e))?;
         stream.flush().map_err(|e| format!("Flush error: {}", e))?;
 
+        Ok(())
+    }
+
+    /// Dispatches a remote command to an Otium Link peer to open the Smart Cast Presentation receiver
+    pub fn send_remote_cast_command(
+        &self,
+        target_ip: &str,
+        target_port: u16,
+        url: &str,
+        pin: &str,
+    ) -> Result<(), String> {
+        let sender_name = { self.self_device.lock().unwrap().name.clone() };
+        let payload = RemoteCastPayload {
+            action: "open_cast".to_string(),
+            url: url.to_string(),
+            pin: pin.to_string(),
+            sender: sender_name,
+        };
+
+        let payload_bytes = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
+        let mut stream = TcpStream::connect(format!("{}:{}", target_ip, target_port))
+            .map_err(|e| format!("Failed to connect to peer {}:{}: {}", target_ip, target_port, e))?;
+
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
+        stream.write_all(PROTOCOL_MAGIC).map_err(|e| e.to_string())?;
+        stream.write_all(&[3u8]).map_err(|e| e.to_string())?; // Type 3 = Remote Cast Launch
+        let len_bytes = (payload_bytes.len() as u32).to_be_bytes();
+        stream.write_all(&len_bytes).map_err(|e| e.to_string())?;
+        stream.write_all(&payload_bytes).map_err(|e| e.to_string())?;
+        stream.flush().map_err(|e| e.to_string())?;
         Ok(())
     }
 }

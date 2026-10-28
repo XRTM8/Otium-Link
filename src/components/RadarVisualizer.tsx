@@ -1,5 +1,5 @@
 import React from 'react';
-import { Laptop, Smartphone, Radio, Plus, Check } from 'lucide-react';
+import { Laptop, Smartphone, Radio, Plus, Check, Tv } from 'lucide-react';
 import { Device } from '../core/types';
 
 interface RadarVisualizerProps {
@@ -7,6 +7,7 @@ interface RadarVisualizerProps {
   selectedPeerId: string | null;
   onSelectPeer: (id: string) => void;
   onOpenDirectConnect: () => void;
+  onLaunchRemoteCast?: (peer: Device) => void;
 }
 
 export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
@@ -14,6 +15,7 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
   selectedPeerId,
   onSelectPeer,
   onOpenDirectConnect,
+  onLaunchRemoteCast,
 }) => {
   const activePeers = devices.filter((d) => !d.isSelf);
   const selfDevice = devices.find((d) => d.isSelf);
@@ -176,10 +178,26 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
                     جهازك
                   </span>
                 ) : isSelected ? (
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-md">
-                    <Check className="w-3 h-3" />
-                    <span>المستهدف</span>
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {onLaunchRemoteCast && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLaunchRemoteCast(device);
+                        }}
+                        className="flex items-center gap-1 text-[10px] font-bold text-purple-300 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 px-2 py-0.5 rounded-md transition-colors otium-press"
+                        title="فتح شاشة العرض الذكي على هذا الجهاز تلقائياً"
+                      >
+                        <Tv className="w-3 h-3 text-purple-400" />
+                        <span>عرض</span>
+                      </button>
+                    )}
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-md">
+                      <Check className="w-3 h-3" />
+                      <span>المستهدف</span>
+                    </span>
+                  </div>
                 ) : (
                   <span className="text-[10px] font-medium text-slate-400 hover:text-white bg-white/5 px-2 py-0.5 rounded-md">
                     انقر للاستهداف
