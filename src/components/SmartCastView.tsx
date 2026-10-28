@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import {
   Tv,
   Play,
   Square,
   Copy,
-  ExternalLink,
   ChevronRight,
   ChevronLeft,
   Plus,
@@ -17,6 +17,12 @@ import {
   Crosshair,
   FileText,
   Lock,
+  UploadCloud,
+  RefreshCw,
+  QrCode,
+  Smartphone,
+  Sparkles,
+  Maximize2,
 } from 'lucide-react';
 import {
   CastInfo,
@@ -30,6 +36,7 @@ import {
   broadcastCastMessage,
   openExternalUrl,
 } from '../core/tauriBridge';
+import { convertPdfToSlides } from '../core/pdfSlideConverter';
 
 interface SmartCastViewProps {
   showToast: (type: 'success' | 'info' | 'warning', title: string, description?: string) => void;
@@ -51,6 +58,17 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
   const [isLoading, setIsLoading] = useState(false);
   const [enablePin, setEnablePin] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedMdns, setCopiedMdns] = useState(false);
+  const [isClickerActive, setIsClickerActive] = useState(true);
+
+  // QR Code State
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [showQrModal, setShowQrModal] = useState(false);
+
+  // PDF Slide Importer State
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [isConvertingPdf, setIsConvertingPdf] = useState(false);
+  const [pdfProgressText, setPdfProgressText] = useState('');
 
   // Slides State
   const [slides, setSlides] = useState<SlideData[]>([
@@ -99,6 +117,34 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
     });
   }, []);
 
+  // Generate QR Code when running
+  useEffect(() => {
+    if (castInfo.is_running && castInfo.url) {
+      QRCode.toDataURL(castInfo.url, {
+        margin: 1,
+        width: 256,
+        color: {
+          dark: '#030712',
+          light: '#10b981',
+        },
+      })
+        .then((url) => setQrDataUrl(url))
+        .catch(() => {});
+    } else {
+      setQrDataUrl('');
+    }
+  }, [castInfo.is_running, castInfo.url]);
+
+  const triggerHaptic = () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(30);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const handleToggleCast = async () => {
     setIsLoading(true);
     try {
@@ -132,10 +178,21 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
     }
   };
 
+  const handleCopyMdns = () => {
+    const mdnsUrl = `http://otium.local:${castInfo.port}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(mdnsUrl);
+      setCopiedMdns(true);
+      setTimeout(() => setCopiedMdns(false), 2000);
+      showToast('success', 'تم نسخ الرابط المختصر', mdnsUrl);
+    }
+  };
+
   const handleNextSlide = async () => {
     if (currentSlideIdx < slides.length - 1) {
       const next = currentSlideIdx + 1;
       setCurrentSlideIdx(next);
+      triggerHaptic();
       await setCastSlideIndex(next);
     }
   };
@@ -144,14 +201,58 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
     if (currentSlideIdx > 0) {
       const prev = currentSlideIdx - 1;
       setCurrentSlideIdx(prev);
+      triggerHaptic();
       await setCastSlideIndex(prev);
     }
   };
 
   const handleSelectSlide = async (idx: number) => {
     setCurrentSlideIdx(idx);
+    triggerHaptic();
     await setCastSlideIndex(idx);
   };
+
+  // Keyboard & MediaSession Clicker Controller
+  useEffect(() => {
+    if (!castInfo.is_running || !isClickerActive) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        handleNextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+        e.preventDefault();
+        handlePrevSlide();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: slides[currentSlideIdx]?.title || 'شريحة العرض',
+          artist: 'Otium Smart Cast',
+          album: `شريحة ${currentSlideIdx + 1} من ${slides.length}`,
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          handleNextSlide();
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          handlePrevSlide();
+        });
+      } catch {
+        // mediaSession not supported
+      }
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [castInfo.is_running, isClickerActive, currentSlideIdx, slides.length]);
 
   const handleAddSlide = () => {
     const newIdx = slides.length;
@@ -172,6 +273,41 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
     setCastSlides(updated);
     setCastSlideIndex(newIdx);
     showToast('info', `تمت إضافة شريحة #${newIdx + 1}`);
+  };
+
+  // Direct PDF Import Handler
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsConvertingPdf(true);
+    setPdfProgressText('جاري قراءة ملف المحاضرة...');
+    try {
+      const importedSlides = await convertPdfToSlides(file, (current, total) => {
+        setPdfProgressText(`تحويل صفحة ${current} من ${total}...`);
+      });
+
+      if (importedSlides.length === 0) {
+        showToast('warning', 'لم يتم العثور على صفحات قابلة للتحويل في ملف الـ PDF');
+        return;
+      }
+
+      setSlides(importedSlides);
+      setCurrentSlideIdx(0);
+      await setCastSlides(importedSlides);
+      await setCastSlideIndex(0);
+      showToast(
+        'success',
+        'تم استيراد المحاضرة بنجاح!',
+        `تم تحويل ${importedSlides.length} صفحة من ملف "${file.name}" إلى شرائح عرض.`
+      );
+    } catch (err: any) {
+      showToast('warning', 'تعذر استيراد ملف الـ PDF', String(err));
+    } finally {
+      setIsConvertingPdf(false);
+      setPdfProgressText('');
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
+    }
   };
 
   const handleDeleteSlide = (idx: number) => {
@@ -288,6 +424,7 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
                 <span>{enablePin ? 'رمز PIN مفعّل' : 'تفعيل رمز PIN'}</span>
               </button>
             )}
+
             <button
               onClick={handleToggleCast}
               disabled={isLoading}
@@ -312,28 +449,57 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
           </div>
         </div>
 
-        {/* Live URL & Viewer Info Bar (When Running) */}
+        {/* Live URL & Fast Access Bar (When Running) */}
         {castInfo.is_running && (
-          <div className="mt-4 pt-4 border-t border-white/[0.08] flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="mt-4 pt-4 border-t border-white/[0.08] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-xs text-slate-400">افتح هذا الرابط على متصفح السبورة:</span>
+              <span className="text-xs text-slate-400">افتح الرابط في متصفح السبورة:</span>
+
+              {/* IP Direct Address */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/50 border border-emerald-500/30 text-emerald-300 font-mono text-xs font-bold dir-ltr">
                 <span>{castInfo.url}</span>
               </div>
               <button
                 onClick={handleCopyUrl}
-                title="نسخ الرابط"
+                title="نسخ عنوان الـ IP"
                 className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-colors otium-press"
               >
                 {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
               </button>
+
+              {/* mDNS Friendly Address */}
+              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-mono text-xs dir-ltr">
+                <span>otium.local:{castInfo.port}</span>
+              </div>
               <button
-                onClick={() => openExternalUrl(castInfo.url)}
-                title="معاينة في المتصفح"
+                onClick={handleCopyMdns}
+                title="نسخ الرابط المختصر (mDNS)"
                 className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-colors otium-press"
               >
-                <ExternalLink className="w-4 h-4" />
+                {copiedMdns ? <Check className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
               </button>
+
+              {/* Open Receiver Window / Browser */}
+              <button
+                onClick={() => openExternalUrl(castInfo.url)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition-colors otium-press"
+                title="عرض في المتصفح أو ملء الشاشة على هذا الحاسوب"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>شاشة العرض (Receiver)</span>
+              </button>
+
+              {/* QR Code Quick Pill */}
+              {qrDataUrl && (
+                <button
+                  onClick={() => setShowQrModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 transition-colors otium-press"
+                  title="إظهار باركود QR للمسح بكاميرا الهاتف أو السبورة"
+                >
+                  <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>رمز QR</span>
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -352,15 +518,37 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
             </div>
           </div>
         )}
+
+        {/* Presenter Clicker & Volume Keys Mode Banner */}
+        {castInfo.is_running && (
+          <div className="mt-3 pt-3 border-t border-white/[0.05] flex items-center justify-between text-xs text-slate-400">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                <strong>وضع جهاز التحكم (Clicker):</strong> يمكنك استخدام أزرار الكيبورد (الأسهم / Space) أو ريموت البلوتوث للتنقل بين الشرائح مع اهتزاز لمسي.
+              </span>
+            </div>
+            <button
+              onClick={() => setIsClickerActive(!isClickerActive)}
+              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-colors ${
+                isClickerActive
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  : 'bg-white/5 text-slate-400 border border-white/10'
+              }`}
+            >
+              {isClickerActive ? 'مفعّل ⚡' : 'معطّل'}
+            </button>
+          </div>
+        )}
       </section>
 
       {/* ========================================================= */}
       {/* SECTION 2: PRESENTER DECK & SLIDE MANAGER */}
       {/* ========================================================= */}
       <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-12'} gap-4`}>
-        {/* Slides Controller (8 cols on desktop) */}
+        {/* Slides Controller (7 cols on desktop) */}
         <section className={`${isMobile ? '' : 'col-span-7'} otium-card rounded-2xl p-4 sm:p-5 border border-white/[0.08] space-y-4`}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-emerald-400" />
               <h3 className="text-xs sm:text-sm font-bold text-white">شرائح العرض والمستندات</h3>
@@ -370,9 +558,34 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
             </div>
 
             <div className="flex items-center gap-1.5">
+              {/* Direct PDF Slide Import Button */}
+              <button
+                type="button"
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={isConvertingPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-200 text-xs font-bold transition-all otium-press"
+                title="استيراد ملف المحاضرة بالكامل (PDF) وتحويل كل صفحة لشريحة عرض تلقائياً"
+              >
+                {isConvertingPdf ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-300" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-purple-300" />
+                )}
+                <span>{isConvertingPdf ? pdfProgressText : 'استيراد PDF للمحاضرة'}</span>
+              </button>
+
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={handlePdfUpload}
+              />
+
+              {/* Add Single Slide */}
               <button
                 onClick={handleAddSlide}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition-colors otium-press"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition-colors otium-press"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>شريحة جديدة</span>
@@ -453,41 +666,54 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
               className="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50 resize-none font-sans"
             />
 
-            {/* Optional Image Upload Button */}
-            <div className="flex items-center justify-between pt-1">
-              <button
-                type="button"
-                onClick={() => slideImageInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-300 transition-colors otium-press"
-              >
-                <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
-                <span>
-                  {slides[currentSlideIdx]?.image_data ? 'تغيير صورة الشريحة' : 'إرفاق صورة للشريحة'}
-                </span>
-              </button>
-
-              <input
-                ref={slideImageInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
-
-              {slides[currentSlideIdx]?.image_data && (
+            {/* Image Slide Thumbnail & Upload Button */}
+            <div className="flex flex-col gap-2 pt-1">
+              <div className="flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => {
-                    const updated = slides.map((s, i) =>
-                      i === currentSlideIdx ? { ...s, image_data: null } : s
-                    );
-                    setSlides(updated);
-                    setCastSlides(updated);
-                  }}
-                  className="text-[11px] text-rose-400 hover:underline"
+                  onClick={() => slideImageInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-300 transition-colors otium-press"
                 >
-                  إزالة الصورة
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>
+                    {slides[currentSlideIdx]?.image_data ? 'تغيير صورة الشريحة' : 'إرفاق صورة للشريحة'}
+                  </span>
                 </button>
+
+                <input
+                  ref={slideImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+
+                {slides[currentSlideIdx]?.image_data && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = slides.map((s, i) =>
+                        i === currentSlideIdx ? { ...s, image_data: null } : s
+                      );
+                      setSlides(updated);
+                      setCastSlides(updated);
+                    }}
+                    className="text-[11px] text-rose-400 hover:underline"
+                  >
+                    إزالة الصورة
+                  </button>
+                )}
+              </div>
+
+              {/* Render small preview if image exists */}
+              {slides[currentSlideIdx]?.image_data && (
+                <div className="relative rounded-xl overflow-hidden border border-white/10 max-h-36 bg-black/50 flex items-center justify-center">
+                  <img
+                    src={slides[currentSlideIdx].image_data!}
+                    alt="معاينة الشريحة"
+                    className="max-h-36 object-contain"
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -581,6 +807,46 @@ export const SmartCastView: React.FC<SmartCastViewProps> = ({ showToast, isMobil
           </section>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* MODAL: QR CODE ENLARGED VIEW */}
+      {/* ========================================================= */}
+      {showQrModal && qrDataUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-otium-fade"
+          onClick={() => setShowQrModal(false)}
+        >
+          <div
+            className="otium-card max-w-sm w-full p-6 rounded-3xl border border-emerald-500/30 text-center space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-emerald-400" />
+                <span>رمز الاستجابة السريعة (QR)</span>
+              </h3>
+              <button
+                onClick={() => setShowQrModal(false)}
+                className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg bg-white/5"
+              >
+                إغلاق
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              وجّه كاميرا الهاتف أو جهاز السبورة الذكية نحو الرمز لفتح العرض مباشرة:
+            </p>
+
+            <div className="p-3 bg-white rounded-2xl inline-block shadow-2xl">
+              <img src={qrDataUrl} alt="رابط العرض الذكي" className="w-56 h-56 mx-auto" />
+            </div>
+
+            <div className="text-xs font-mono text-emerald-400 bg-emerald-500/10 py-1.5 px-3 rounded-xl border border-emerald-500/20 truncate dir-ltr">
+              {castInfo.url}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
