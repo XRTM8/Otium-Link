@@ -25,7 +25,9 @@ import {
   Tv,
   Eye,
   EyeOff,
+  X,
 } from 'lucide-react';
+import { parseClipboardFilePath } from './core/filePathHelper';
 import { OtiumLinkLogo } from './components/OtiumLinkLogo';
 import { SettingsModal } from './components/SettingsModal';
 import { DirectConnectModal } from './components/DirectConnectModal';
@@ -92,6 +94,7 @@ export const App: React.FC = () => {
   const [appSettings, setAppSettings] = useState<AppSettings>(loadSettings());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDirectConnectOpen, setIsDirectConnectOpen] = useState(false);
+  const [pendingFilePrompt, setPendingFilePrompt] = useState<{ fileName: string; filePath: string } | null>(null);
 
   // Floating Toasts with Deduplication and Throttling
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -337,7 +340,7 @@ export const App: React.FC = () => {
         addClipboardHistoryItem(clip.text, false);
         playReceiveChime(appSettings.audioFeedback, appSettings.soundVolume);
 
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        if (appSettings.autoCopyReceivedText && typeof navigator !== 'undefined' && navigator.clipboard) {
           navigator.clipboard.writeText(clip.text).catch(() => {});
         }
         showToast('success', 'تم استلام نص للحافظة', `من ${clip.sender}`);
@@ -360,6 +363,15 @@ export const App: React.FC = () => {
       onNativeClipboardChanged: (payload) => {
         const trimmed = payload.text.trim();
         if (!trimmed) return;
+
+        // Check if clipboard holds a local file path (LocalSend PR #3515 Heuristic)
+        const pathCheck = parseClipboardFilePath(payload.text);
+        if (pathCheck.isFilePath) {
+          setPendingFilePrompt({
+            fileName: pathCheck.fileName,
+            filePath: pathCheck.filePath,
+          });
+        }
 
         // 1. Guard against local redundant trigger
         if (trimmed === lastAutoSyncedRef.current) return;
@@ -615,6 +627,48 @@ export const App: React.FC = () => {
       !clipboardSearch.trim() || item.text.toLowerCase().includes(clipboardSearch.trim().toLowerCase());
     return matchesFilter && matchesSearch;
   });
+
+  // Handle 1-click send of clipboard file path (LocalSend PR #3515 Heuristic)
+  const handleSendDetectedFile = async (filePath: string) => {
+    const targetPeer = devices.find(
+      (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
+    );
+    if (!targetPeer) {
+      showToast(
+        'warning',
+        'لا يوجد جهاز مقترن حالياً',
+        'اختر جهازاً من الرادار أعلاه أو شغّل Otium Link على الجهاز الآخر لإرسال الملف'
+      );
+      return;
+    }
+    const pathCheck = parseClipboardFilePath(filePath);
+    const fileName = pathCheck.fileName || 'file.bin';
+    const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    setPendingFilePrompt(null);
+    showToast('info', 'جاري إرسال الملف المنسوخ...', `${fileName} إلى ${targetPeer.name}`);
+    const ok = await transmitFile(targetPeer.ip, filePath);
+    if (ok) {
+      playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+      showToast('success', 'تم إرسال الملف بنجاح ✓', `${fileName} إلى ${targetPeer.name}`);
+      setTransfers((prev) => [
+        {
+          id: txId,
+          name: fileName,
+          size: 0,
+          type: 'file',
+          progress: 1,
+          status: 'completed',
+          sender: 'هذا الجهاز',
+          receiver: targetPeer.name,
+          timestamp: Date.now(),
+          verified: true,
+        },
+        ...prev,
+      ]);
+    } else {
+      showToast('warning', 'تعذّر إرسال الملف', `تحقق من اتصال ${targetPeer.name}`);
+    }
+  };
 
   // Handle file dispatch
   const handleSendFiles = async (files: File[]) => {
@@ -885,6 +939,42 @@ export const App: React.FC = () => {
 
               {/* Column 2: Live Universal Clipboard & File Dispatch (Desktop 7 cols / Mobile full) */}
               <div className={`${isDesktop ? 'col-span-7 space-y-4' : 'space-y-3.5'}`}>
+                {/* Detected Local File Path Banner (LocalSend PR #3515 Heuristic) */}
+                {pendingFilePrompt && (
+                  <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+                        <File className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-white truncate">
+                          تم رصد ملف منسوخ: <span className="text-blue-300 font-mono">{pendingFilePrompt.fileName}</span>
+                        </div>
+                        <div className="text-[10.5px] text-slate-400 truncate dir-ltr text-left">
+                          {pendingFilePrompt.filePath}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handleSendDetectedFile(pendingFilePrompt.filePath)}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/30 flex items-center gap-1 otium-press"
+                        title="إرسال هذا الملف فوراً إلى الجهاز المقترن"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>إرسال الملف</span>
+                      </button>
+                      <button
+                        onClick={() => setPendingFilePrompt(null)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                        title="تجاهل"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Live Universal Clipboard Section */}
                 <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
                   <div className="flex items-center justify-between">

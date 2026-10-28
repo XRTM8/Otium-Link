@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   AlertCircle,
   RotateCcw,
+  Copy,
 } from 'lucide-react';
 import { AppSettings, loadSettings, saveSettings } from '../core/settings';
 import { updateDeviceName, updateDownloadDir, fetchDownloadDir, openExternalUrl } from '../core/tauriBridge';
@@ -293,6 +294,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                     settings.autoClipboardSync ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Auto-Copy Received Content (LocalSend PR #3159) */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
+                  <Copy className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-white">النسخ التلقائي للنصوص المستلمة</div>
+                  <div className="text-xs text-slate-400">وضع النصوص والروابط المستلمة مباشرة في حافظة النظام فور وصولها</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleOption('autoCopyReceivedText')}
+                aria-label="تبديل النسخ التلقائي للنصوص المستلمة"
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors otium-press ${
+                  settings.autoCopyReceivedText ? 'bg-blue-600' : 'bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    settings.autoCopyReceivedText ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
               </button>

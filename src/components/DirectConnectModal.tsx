@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { X, Network, Plus, Check, Laptop, Smartphone, AlertCircle, Copy, Radio, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Network, Plus, Check, Laptop, Smartphone, AlertCircle, Copy, Radio, ShieldCheck, QrCode, ClipboardPaste } from 'lucide-react';
+import QRCode from 'qrcode';
 import { Device } from '../core/types';
 import { addDirectPeer } from '../core/tauriBridge';
+import { parseQRPairingUri } from '../core/filePathHelper';
 
 interface DirectConnectModalProps {
   isOpen: boolean;
@@ -23,8 +25,44 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selfDevice && selfDevice.ip) {
+      const uri = `otium://connect?ip=${selfDevice.ip}&port=${selfDevice.port || 42425}&name=${encodeURIComponent(
+        selfDevice.name || 'Otium Link'
+      )}&os=${selfDevice.os}`;
+      QRCode.toDataURL(uri, {
+        width: 160,
+        margin: 1,
+        color: {
+          dark: '#38bdf8',
+          light: '#05070a',
+        },
+      })
+        .then(setQrDataUrl)
+        .catch(() => setQrDataUrl(null));
+    }
+  }, [selfDevice]);
 
   if (!isOpen) return null;
+
+  const handlePasteConnect = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const parsed = parseQRPairingUri(text);
+      if (parsed) {
+        setIpInput(parsed.ip);
+        if (parsed.name) setNameInput(parsed.name);
+        if (parsed.os) setOsType(parsed.os);
+        setErrorMsg(null);
+      } else if (text.trim()) {
+        setIpInput(text.trim());
+      }
+    } catch {
+      // Guard against clipboard read permission rejection
+    }
+  };
 
   const handleAdd = async () => {
     const trimmedIp = ipInput.trim();
@@ -123,20 +161,39 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
-                عنوان IP للجهاز الآخر (من تبويب "بيانات جهازي" في الجهاز الآخر)
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300">
+                  عنوان IP أو رابط QR للجهاز الآخر
+                </label>
+                <button
+                  type="button"
+                  onClick={handlePasteConnect}
+                  className="text-[11px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition-colors"
+                  title="لصق عنوان IP أو رابط QR المنسوخ تلقائياً"
+                >
+                  <ClipboardPaste className="w-3 h-3" />
+                  <span>لصق من الحافظة</span>
+                </button>
+              </div>
               <input
                 type="text"
                 value={ipInput}
                 onChange={(e) => {
-                  setIpInput(e.target.value);
+                  const val = e.target.value;
+                  const parsed = parseQRPairingUri(val);
+                  if (parsed) {
+                    setIpInput(parsed.ip);
+                    if (parsed.name) setNameInput(parsed.name);
+                    if (parsed.os) setOsType(parsed.os);
+                  } else {
+                    setIpInput(val);
+                  }
                   setErrorMsg(null);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleAdd();
                 }}
-                placeholder="192.168.1.105"
+                placeholder="192.168.1.105 أو otium://connect?..."
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 text-sm font-mono dir-ltr text-left transition-all"
               />
             </div>
@@ -214,6 +271,36 @@ export const DirectConnectModal: React.FC<DirectConnectModalProps> = ({
                 <span className="font-bold text-white">{selfDevice?.name || 'Otium Link'}</span>
               </div>
             </div>
+
+            {/* QR Code Quick Pairing (LocalSend PR #3437 Innovation) */}
+            {qrDataUrl && (
+              <div className="p-3.5 rounded-xl bg-black/40 border border-blue-500/20 flex flex-col items-center justify-center gap-2.5 text-center">
+                <div className="p-2 rounded-xl bg-[#05070a] border border-blue-500/30 shadow-lg">
+                  <img
+                    src={qrDataUrl}
+                    alt="QR Code"
+                    className="w-32 h-32 rounded-lg"
+                  />
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    امسح الرمز أو انسخ الرابط للاقتران الفوري
+                  </span>
+                  <button
+                    onClick={() => {
+                      const uri = `otium://connect?ip=${selfDevice?.ip || '127.0.0.1'}&port=${selfDevice?.port || 42425}&name=${encodeURIComponent(
+                        selfDevice?.name || 'Otium Link'
+                      )}&os=${selfDevice?.os || 'windows'}`;
+                      copyToClipboard(uri, 'qr_uri');
+                    }}
+                    className="px-2.5 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20 text-[11px] font-bold text-blue-300 border border-blue-500/30 flex items-center gap-1 transition-colors"
+                  >
+                    {copiedField === 'qr_uri' ? <Check className="w-3 h-3" /> : <QrCode className="w-3 h-3" />}
+                    <span>{copiedField === 'qr_uri' ? 'تم نسخ الرابط' : 'نسخ رابط QR'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">

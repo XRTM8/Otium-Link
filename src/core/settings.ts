@@ -12,6 +12,7 @@ export interface AppSettings {
   blockSensitiveAutoSync: boolean;
   downloadDir: string;
   trustedPeers: string[];
+  autoCopyReceivedText: boolean; // LocalSend PR #3159
 }
 
 const SETTINGS_KEY = 'otium_link_settings_v1';
@@ -26,6 +27,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   blockSensitiveAutoSync: true,
   downloadDir: '',
   trustedPeers: [],
+  autoCopyReceivedText: true,
 };
 
 export function loadSettings(): AppSettings {
