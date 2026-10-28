@@ -79,6 +79,7 @@ pub struct CastManager {
     inner: Arc<Mutex<CastInner>>,
     should_stop: Arc<AtomicBool>,
     next_client_id: Arc<AtomicU64>,
+    app_handle: Arc<Mutex<Option<AppHandle>>>,
 }
 
 /// Resolves the active private Wi-Fi / LAN IP without external internet queries
@@ -122,10 +123,14 @@ impl CastManager {
             })),
             should_stop: Arc::new(AtomicBool::new(false)),
             next_client_id: Arc::new(AtomicU64::new(1)),
+            app_handle: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn start(&self, pin: Option<String>, app: AppHandle) -> Result<CastInfo, String> {
+        if let Ok(mut handle) = self.app_handle.lock() {
+            *handle = Some(app.clone());
+        }
         let mut inner = self.inner.lock().unwrap();
         if inner.is_running {
             let local_ip = resolve_local_ip();
@@ -309,9 +314,19 @@ impl CastManager {
         let message = format!("event: {}\ndata: {}\n\n", event_type, data_json);
         let bytes = message.as_bytes();
 
+        let prev_len = inner.clients.len();
         inner.clients.retain_mut(|client| {
             client.stream.write_all(bytes).is_ok() && client.stream.flush().is_ok()
         });
+        let new_len = inner.clients.len();
+
+        if prev_len != new_len {
+            if let Ok(guard) = self.app_handle.lock() {
+                if let Some(ref app) = *guard {
+                    let _ = app.emit("otium-link://cast-viewers-updated", new_len);
+                }
+            }
+        }
     }
 
     fn handle_http_client(&self, mut stream: TcpStream, app: AppHandle) {
@@ -383,7 +398,7 @@ impl CastManager {
 
             // Server-Sent Events (SSE) Stream
             let _ = stream.set_read_timeout(None);
-            let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+            let _ = stream.set_write_timeout(Some(Duration::from_millis(150)));
 
             let headers = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
             if stream.write_all(headers.as_bytes()).is_err() || stream.flush().is_err() {
@@ -679,6 +694,7 @@ fn generate_smart_board_html(has_pin_protection: bool) -> String {
       <div style="font-size: 40px; margin-bottom: 12px;">🔒</div>
       <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 8px;">جلسة عرض محمية</h2>
       <p style="font-size: 13px; color: #94a3b8;">أدخل رمز PIN الظاهر على شاشة المحاضر للبدء:</p>
+      <div id="pinError" style="display: none; color: #f87171; font-size: 13px; font-weight: bold; margin-top: 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 8px 12px; border-radius: 12px;">رمز PIN غير صحيح، يرجى المحاولة مرة أخرى</div>
       <input type="text" id="pinInput" class="pin-input" placeholder="1234" maxlength="6" />
       <button class="btn" style="width: 100%; justify-content: center; background: #10b981; color: #022c22; font-weight: 800; padding: 12px;" onclick="submitPin()">
         اتصال بالعرض
@@ -733,21 +749,34 @@ fn generate_smart_board_html(has_pin_protection: bool) -> String {
       if (e.key === 'c' || e.key === 'C') clearLocalCanvas();
     }});
 
+    let currentSse = null;
+
     function submitPin() {{
       const pin = pinInput.value.trim();
       if (pin) {{
-        sessionStorage.setItem('otium_cast_pin', pin);
-        pinModal.style.display = 'none';
         initEventStream(pin);
       }}
     }}
 
     function initEventStream(overridePin) {{
+      if (currentSse) {{
+        try {{ currentSse.close(); }} catch (_) {{}}
+        currentSse = null;
+      }}
+
       const savedPin = overridePin || sessionStorage.getItem('otium_cast_pin') || '';
       const streamUrl = savedPin ? `/events?pin=${{encodeURIComponent(savedPin)}}` : '/events';
       const sse = new EventSource(streamUrl);
+      currentSse = sse;
 
       sse.addEventListener('slide', (e) => {{
+        if (savedPin) {{
+          sessionStorage.setItem('otium_cast_pin', savedPin);
+        }}
+        pinModal.style.display = 'none';
+        const errEl = document.getElementById('pinError');
+        if (errEl) errEl.style.display = 'none';
+
         try {{
           const data = JSON.parse(e.data);
           slideContainer.style.opacity = '0';
@@ -817,8 +846,14 @@ fn generate_smart_board_html(has_pin_protection: bool) -> String {
 
       sse.onerror = (err) => {{
         console.warn('SSE disconnected or unauthorized', err);
-        if (pinRequired && !savedPin) {{
+        sessionStorage.removeItem('otium_cast_pin');
+        try {{ sse.close(); }} catch (_) {{}}
+        currentSse = null;
+        if (pinRequired) {{
           pinModal.style.display = 'flex';
+          const errEl = document.getElementById('pinError');
+          if (errEl) errEl.style.display = 'block';
+          pinInput.value = '';
           pinInput.focus();
         }}
       }};

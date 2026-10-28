@@ -32,6 +32,8 @@ pub struct BeaconMessage {
     pub name: String,
     pub os: String,
     pub port: u16,
+    #[serde(default)]
+    pub is_reply: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -106,8 +108,20 @@ pub fn sanitize_filename(raw: &str) -> String {
         return "downloaded_file.bin".to_string();
     }
 
+    // Bound filename length to 120 chars to prevent Windows MAX_PATH (260) overflows
+    let bounded = if trimmed.len() > 120 {
+        let p = Path::new(&trimmed);
+        let ext = p.extension().and_then(|e| e.to_str()).map(|e| format!(".{}", e)).unwrap_or_default();
+        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+        let max_stem_len = 120usize.saturating_sub(ext.len()).max(8);
+        let truncated_stem: String = stem.chars().take(max_stem_len).collect();
+        format!("{}{}", truncated_stem, ext)
+    } else {
+        trimmed
+    };
+
     // Windows reserved device names: CON, PRN, AUX, NUL, COM1-9, LPT1-9
-    let stem = Path::new(&trimmed)
+    let stem = Path::new(&bounded)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("")
@@ -119,9 +133,9 @@ pub fn sanitize_filename(raw: &str) -> String {
     ];
 
     if RESERVED_NAMES.contains(&stem.as_str()) {
-        format!("otium_{}", trimmed)
+        format!("otium_{}", bounded)
     } else {
-        trimmed
+        bounded
     }
 }
 
@@ -352,6 +366,7 @@ impl NetworkManager {
                         name: dev.name.clone(),
                         os: dev.os.clone(),
                         port: dev.port,
+                        is_reply: false,
                     }
                 };
 
@@ -413,8 +428,9 @@ impl NetworkManager {
                         };
 
                         let mut table = listener_peers.lock().unwrap();
+                        let mut is_new = false;
                         if table.len() < 64 || table.contains_key(&beacon.id) {
-                            let is_new = !table.contains_key(&beacon.id);
+                            is_new = !table.contains_key(&beacon.id);
                             table.insert(beacon.id, peer.clone());
                             // Only notify frontend when a brand-new peer is discovered to avoid toast spam
                             if is_new {
@@ -424,19 +440,23 @@ impl NetworkManager {
                             let _ = listener_app.emit("otium-link://peers-updated", active_list);
                         }
 
-                        // Send direct UDP unicast beacon reply back to src_addr to break asymmetric broadcast drops
-                        let reply_beacon = {
-                            let dev = listener_dev.lock().unwrap();
-                            BeaconMessage {
-                                magic: "OTIUM_LINK_V1".to_string(),
-                                id: dev.id.clone(),
-                                name: dev.name.clone(),
-                                os: dev.os.clone(),
-                                port: dev.port,
+                        // Send direct UDP unicast beacon reply ONLY if incoming was NOT a reply AND peer is newly discovered.
+                        // This strictly prevents the infinite UDP ping-pong storm between LAN peers.
+                        if !beacon.is_reply && is_new {
+                            let reply_beacon = {
+                                let dev = listener_dev.lock().unwrap();
+                                BeaconMessage {
+                                    magic: "OTIUM_LINK_V1".to_string(),
+                                    id: dev.id.clone(),
+                                    name: dev.name.clone(),
+                                    os: dev.os.clone(),
+                                    port: dev.port,
+                                    is_reply: true,
+                                }
+                            };
+                            if let Ok(reply_bytes) = serde_json::to_vec(&reply_beacon) {
+                                let _ = socket.send_to(&reply_bytes, format!("{}:{}", src_addr.ip(), BROADCAST_PORT));
                             }
-                        };
-                        if let Ok(reply_bytes) = serde_json::to_vec(&reply_beacon) {
-                            let _ = socket.send_to(&reply_bytes, format!("{}:{}", src_addr.ip(), BROADCAST_PORT));
                         }
                     }
                 }
@@ -707,6 +727,7 @@ impl NetworkManager {
                                             let mut chunk = [0u8; 65536]; // 64KB chunks
                                             let mut hasher = crc32fast::Hasher::new();
                                             let mut success = true;
+                                            let mut last_progress_emit = std::time::Instant::now();
 
                                             while received_bytes < header.file_size {
                                                 let to_read = (header.file_size - received_bytes).min(chunk.len() as u64) as usize;
@@ -723,7 +744,10 @@ impl NetworkManager {
                                                         hasher.update(&chunk[..n]);
                                                         received_bytes += n as u64;
 
-                                                        if header.file_size > 1_048_576 {
+                                                        let now_inst = std::time::Instant::now();
+                                                        let is_final = received_bytes == header.file_size;
+                                                        if header.file_size > 1_048_576 && (is_final || now_inst.duration_since(last_progress_emit) >= Duration::from_millis(150)) {
+                                                            last_progress_emit = now_inst;
                                                             let _ = app_clone.emit(
                                                                 "otium-link://file-progress",
                                                                 serde_json::json!({
@@ -797,7 +821,19 @@ impl NetworkManager {
                                     let mut payload = vec![0u8; payload_len];
                                     if stream.read_exact(&mut payload).is_ok() {
                                         if let Ok(cmd) = serde_json::from_slice::<RemoteCastPayload>(&payload) {
-                                            let _ = app_clone.emit("otium-link://remote-cast-requested", cmd);
+                                            // Security Validation: Only forward legitimate local smart cast URLs
+                                            let is_http = cmd.url.starts_with("http://") || cmd.url.starts_with("https://");
+                                            let peer_ip_str = peer_addr.ip().to_string();
+                                            let is_local_cast_target = cmd.url.contains(":42426")
+                                                || cmd.url.contains(&peer_ip_str)
+                                                || cmd.url.contains("127.0.0.1")
+                                                || cmd.url.contains("localhost");
+
+                                            if is_http && is_local_cast_target {
+                                                let _ = app_clone.emit("otium-link://remote-cast-requested", cmd);
+                                            } else {
+                                                log::warn!("Rejected suspicious remote cast URL from {}: {}", peer_addr, cmd.url);
+                                            }
                                         }
                                     }
                                 }
@@ -940,6 +976,7 @@ impl NetworkManager {
         let mut buffer = [0u8; 65536]; // 64KB buffer
         let mut hasher = crc32fast::Hasher::new();
         let mut sent_bytes: u64 = 0;
+        let mut last_progress_emit = std::time::Instant::now();
 
         loop {
             let n = file.read(&mut buffer).map_err(|e| format!("File read error: {}", e))?;
@@ -949,7 +986,12 @@ impl NetworkManager {
             stream.write_all(&buffer[..n]).map_err(|e| format!("Socket stream error: {}", e))?;
             hasher.update(&buffer[..n]);
             sent_bytes += n as u64;
-            on_progress(sent_bytes, file_size);
+
+            let now_inst = std::time::Instant::now();
+            if sent_bytes == file_size || now_inst.duration_since(last_progress_emit) >= Duration::from_millis(150) {
+                last_progress_emit = now_inst;
+                on_progress(sent_bytes, file_size);
+            }
         }
 
         // Send 4-byte CRC32 trailer
@@ -1047,6 +1089,11 @@ mod tests {
         assert_eq!(sanitize_filename(""), "downloaded_file.bin");
         // Unicode Right-to-Left Override (RTLO) spoofing attack stripped
         assert_eq!(sanitize_filename("invoice\u{202E}fdp.exe"), "invoicefdp.exe");
+        // Long filename truncation to max 120 chars to protect Windows MAX_PATH
+        let long_name = format!("{}.pdf", "a".repeat(250));
+        let sanitized_long = sanitize_filename(&long_name);
+        assert!(sanitized_long.len() <= 120);
+        assert!(sanitized_long.ends_with(".pdf"));
     }
 
     #[test]

@@ -479,6 +479,10 @@ export const App: React.FC = () => {
         ]);
       },
       onRemoteCastRequested: async (cmd) => {
+        if (!cmd.url || (!cmd.url.startsWith('http://') && !cmd.url.startsWith('https://'))) {
+          showToast('warning', 'طلب عرض غير آمن', 'تم حظر الرابط لأسباب أمنية.');
+          return;
+        }
         showToast('info', `طلب عرض شاشة من ${cmd.sender}`, 'جاري فتح شاشة العرض...');
         await openExternalUrl(cmd.url);
       },
