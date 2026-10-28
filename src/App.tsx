@@ -23,6 +23,8 @@ import {
   Send,
   ShieldAlert,
   Tv,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { OtiumLinkLogo } from './components/OtiumLinkLogo';
 import { SettingsModal } from './components/SettingsModal';
@@ -136,6 +138,7 @@ export const App: React.FC = () => {
   const [clipboardHistory, setClipboardHistory] = useState<HistoryItem[]>([]);
   const [clipboardFilter, setClipboardFilter] = useState<'all' | ClipboardContentType>('all');
   const [clipboardSearch, setClipboardSearch] = useState('');
+  const [revealedSensitiveIds, setRevealedSensitiveIds] = useState<Set<string>>(new Set());
   const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
 
   // Transfer history
@@ -377,7 +380,7 @@ export const App: React.FC = () => {
               'درع الحماية: تم تعليق البث التلقائي',
               `تم رصد ${sensitiveCheck.labelArabic}. يمكنك إرساله يدوياً.`
             );
-            addClipboardHistoryItem(payload.text, false);
+            addClipboardHistoryItem(payload.text, false, true, sensitiveCheck.labelArabic);
             return;
           }
         }
@@ -1119,61 +1122,95 @@ export const App: React.FC = () => {
 
               {/* Items List */}
               <div className="space-y-2">
-                {filteredHistory.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3 text-xs hover:bg-white/[0.04] transition-all"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div
-                        className={`p-2 rounded-lg shrink-0 ${
-                          item.type === 'url'
-                            ? 'bg-emerald-500/10 text-emerald-400'
-                            : item.type === 'code'
-                            ? 'bg-purple-500/10 text-purple-400'
-                            : 'bg-cyan-500/10 text-cyan-400'
-                        }`}
-                      >
-                        {item.type === 'url' ? (
-                          <Link className="w-3.5 h-3.5" />
-                        ) : item.type === 'code' ? (
-                          <Code className="w-3.5 h-3.5" />
-                        ) : (
-                          <FileText className="w-3.5 h-3.5" />
-                        )}
-                      </div>
-                      <div className="text-right min-w-0 flex-1">
-                        <span className="font-sans text-gray-200 block truncate">{item.text}</span>
-                        <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
-                          <span>{formatTimestamp(item.timestamp)}</span>
-                          {item.isCleanedUrl && (
-                            <span className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded font-semibold">
-                              تطهير UTM
-                            </span>
+                {filteredHistory.map((item) => {
+                  const isRevealed = revealedSensitiveIds.has(item.id);
+                  const displayText = item.isSensitive && !isRevealed
+                    ? (item.text.length > 8 ? item.text.slice(0, 4) + '••••••••••••••••' : '••••••••')
+                    : item.text;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3 text-xs hover:bg-white/[0.04] transition-all"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div
+                          className={`p-2 rounded-lg shrink-0 ${
+                            item.isSensitive
+                              ? 'bg-amber-500/15 text-amber-400'
+                              : item.type === 'url'
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : item.type === 'code'
+                              ? 'bg-purple-500/10 text-purple-400'
+                              : 'bg-cyan-500/10 text-cyan-400'
+                          }`}
+                        >
+                          {item.isSensitive ? (
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                          ) : item.type === 'url' ? (
+                            <Link className="w-3.5 h-3.5" />
+                          ) : item.type === 'code' ? (
+                            <Code className="w-3.5 h-3.5" />
+                          ) : (
+                            <FileText className="w-3.5 h-3.5" />
                           )}
                         </div>
+                        <div className="text-right min-w-0 flex-1">
+                          <span className={`font-sans block truncate ${item.isSensitive && !isRevealed ? 'text-amber-200/80 font-mono tracking-wider' : 'text-gray-200'}`}>
+                            {displayText}
+                          </span>
+                          <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
+                            <span>{formatTimestamp(item.timestamp)}</span>
+                            {item.isCleanedUrl && (
+                              <span className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded font-semibold">
+                                تطهير UTM
+                              </span>
+                            )}
+                            {item.isSensitive && (
+                              <span className="text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1">
+                                <ShieldAlert className="w-2.5 h-2.5" />
+                                <span>{item.sensitiveLabel || 'بيانات حساسة محجوبة'}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => handleTransmitClipboardText(item.text, false)}
-                        title="إرسال للجهاز المقترن"
-                        className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors otium-press"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleCopyClipboard(item.text, item.id)}
-                        title="نسخ النص"
-                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors otium-press"
-                      >
-                        {copiedHistoryId === item.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
+                      <div className="flex items-center gap-1 shrink-0">
+                        {item.isSensitive && (
+                          <button
+                            onClick={() => {
+                              setRevealedSensitiveIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(item.id)) next.delete(item.id);
+                                else next.add(item.id);
+                                return next;
+                              });
+                            }}
+                            title={isRevealed ? 'إخفاء البيانات' : 'كشف البيانات'}
+                            className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors otium-press"
+                          >
+                            {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
                         )}
-                      </button>
+                        <button
+                          onClick={() => handleTransmitClipboardText(item.text, false)}
+                          title="إرسال للجهاز المقترن"
+                          className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors otium-press"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleCopyClipboard(item.text, item.id)}
+                          title="نسخ النص"
+                          className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors otium-press"
+                        >
+                          {copiedHistoryId === item.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       <button
                         onClick={() => {
                           removeClipboardHistoryItem(item.id);
@@ -1186,7 +1223,8 @@ export const App: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                ))}
+                );
+              })}
 
                 {filteredHistory.length === 0 && (
                   <div className="p-8 text-center text-xs text-gray-400 bg-white/[0.01] rounded-xl border border-white/[0.04]">

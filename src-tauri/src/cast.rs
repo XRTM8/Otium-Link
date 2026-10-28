@@ -84,12 +84,27 @@ pub struct CastManager {
 
 /// Resolves the active private Wi-Fi / LAN IP without external internet queries
 pub fn resolve_local_ip() -> String {
-    if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
-        if socket.connect("192.168.1.1:80").is_ok() || socket.connect("10.0.0.1:80").is_ok() {
-            if let Ok(addr) = socket.local_addr() {
-                let ip = addr.ip().to_string();
-                if ip != "0.0.0.0" && ip != "127.0.0.1" {
-                    return ip;
+    // Probe kernel routing table across multiple common local targets without sending packets
+    let candidates = [
+        "1.1.1.1:80",
+        "8.8.8.8:80",
+        "224.0.0.1:80",
+        "192.168.1.1:80",
+        "192.168.0.1:80",
+        "192.168.43.1:80", // Android Hotspot default gateway
+        "172.20.10.1:80",  // iPhone Hotspot default gateway
+        "10.0.0.1:80",
+        "172.16.0.1:80",
+    ];
+
+    for target in candidates {
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
+            if socket.connect(target).is_ok() {
+                if let Ok(addr) = socket.local_addr() {
+                    let ip = addr.ip().to_string();
+                    if ip != "0.0.0.0" && ip != "127.0.0.1" {
+                        return ip;
+                    }
                 }
             }
         }
@@ -352,13 +367,30 @@ impl CastManager {
         let method = parts[0];
         let path = parts[1];
 
-        if method == "GET" && (path == "/" || path == "/cast" || path.starts_with("/?")) {
+        // Handle CORS Preflight OPTIONS requests for Smart TV browsers (LG webOS, Samsung Tizen)
+        if method == "OPTIONS" {
+            let preflight = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = stream.write_all(preflight.as_bytes());
+            let _ = stream.flush();
+            return;
+        }
+
+        if (method == "GET" || method == "HEAD") && (path == "/" || path == "/cast" || path.starts_with("/?")) {
             // Serve the self-contained Smart Board Receiver web application
             let pin_expected = {
                 let inner = self.inner.lock().unwrap();
                 inner.pin.clone()
             };
             let html = generate_smart_board_html(!pin_expected.is_empty());
+            if method == "HEAD" {
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+                    html.len()
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+                return;
+            }
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n{}",
                 html.len(),

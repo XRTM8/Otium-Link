@@ -11,6 +11,8 @@ export interface HistoryItem {
   type: ClipboardContentType;
   timestamp: number;
   isCleanedUrl?: boolean;
+  isSensitive?: boolean;
+  sensitiveLabel?: string;
 }
 
 const STORAGE_KEY = 'otium_link_clip_history_v1';
@@ -53,7 +55,12 @@ export function loadClipboardHistory(): HistoryItem[] {
   }
 }
 
-export function addClipboardHistoryItem(text: string, isCleanedUrl?: boolean): HistoryItem[] {
+export function addClipboardHistoryItem(
+  text: string,
+  isCleanedUrl?: boolean,
+  isSensitive?: boolean,
+  sensitiveLabel?: string
+): HistoryItem[] {
   if (!text || !text.trim()) return loadClipboardHistory();
   const current = loadClipboardHistory();
 
@@ -74,6 +81,8 @@ export function addClipboardHistoryItem(text: string, isCleanedUrl?: boolean): H
     type: detectContentType(safeText),
     timestamp: Date.now(),
     isCleanedUrl,
+    isSensitive,
+    sensitiveLabel,
   };
 
   const updated = [newItem, ...current.filter((item) => item.text !== safeText)].slice(

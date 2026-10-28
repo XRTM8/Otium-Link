@@ -130,6 +130,7 @@ fn open_file(state: tauri::State<'_, AppState>, file_path: String) -> Result<(),
 
     // Verify file is within designated downloads directory
     let downloads_dir = state.network.get_downloads_dir();
+    let _ = std::fs::create_dir_all(&downloads_dir);
     let canonical_target = path.canonicalize().map_err(|e| e.to_string())?;
     let canonical_downloads = downloads_dir.canonicalize().map_err(|e| e.to_string())?;
 
@@ -156,9 +157,9 @@ fn open_file(state: tauri::State<'_, AppState>, file_path: String) -> Result<(),
     {
         let clean_target = strip_unc_prefix(&canonical_target);
         if is_dangerous_executable {
-            // For dangerous executable files, DO NOT execute directly! Reveal safely in Explorer
+            // For dangerous executable files, DO NOT execute directly! Reveal safely in Explorer without inner quotes
             let _ = std::process::Command::new("explorer")
-                .arg(format!("/select,\"{}\"", clean_target.to_string_lossy()))
+                .arg(format!("/select,{}", clean_target.display()))
                 .spawn();
         } else {
             // Launch safe file viewer via explorer directly without cmd.exe

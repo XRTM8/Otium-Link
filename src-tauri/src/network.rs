@@ -76,7 +76,9 @@ pub fn is_dangerous_unicode_char(c: char) -> bool {
 pub fn is_private_or_local_ip(ip: &std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(ipv4) => {
-            ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local()
+            // Include RFC 6598 Carrier-Grade NAT (100.64.0.0/10) used by Tailscale, overlays & universities
+            let is_cgnat = ipv4.octets()[0] == 100 && (ipv4.octets()[1] & 0xc0) == 64;
+            ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local() || is_cgnat
         }
         std::net::IpAddr::V6(ipv6) => {
             ipv6.is_loopback() || (ipv6.segments()[0] & 0xfe00) == 0xfe80
@@ -714,7 +716,6 @@ impl NetworkManager {
                                             .unwrap_or_default()
                                             .as_secs();
 
-                                        let unique_target = get_unique_filepath(&target_dir, &safe_name);
                                         let temp_filename = format!(".{}_{}.otlink.tmp", safe_name, now);
                                         let temp_path = target_dir.join(&temp_filename);
 
@@ -780,9 +781,11 @@ impl NetworkManager {
                                             drop(file);
 
                                             if success && crc_verified {
-                                                if fs::rename(&temp_path, &unique_target).is_ok() {
+                                                // Re-evaluate unique filepath immediately before rename to guarantee no race collisions on Windows
+                                                let final_target = get_unique_filepath(&target_dir, &safe_name);
+                                                if fs::rename(&temp_path, &final_target).is_ok() {
                                                     temp_guard.defused = true;
-                                                    let final_name = unique_target
+                                                    let final_name = final_target
                                                         .file_name()
                                                         .map(|n| n.to_string_lossy().to_string())
                                                         .unwrap_or(safe_name);
@@ -791,7 +794,7 @@ impl NetworkManager {
                                                         "otium-link://file-received",
                                                         serde_json::json!({
                                                              "name": final_name,
-                                                             "path": unique_target.to_string_lossy(),
+                                                             "path": final_target.to_string_lossy(),
                                                              "size": received_bytes,
                                                              "sender": header.sender,
                                                              "verified": true
@@ -1103,6 +1106,9 @@ mod tests {
         assert!(is_private_or_local_ip(&"192.168.1.50".parse::<IpAddr>().unwrap()));
         assert!(is_private_or_local_ip(&"10.0.5.22".parse::<IpAddr>().unwrap()));
         assert!(is_private_or_local_ip(&"172.16.0.1".parse::<IpAddr>().unwrap()));
+        // CGNAT / Tailscale range (100.64.0.0/10) allowed
+        assert!(is_private_or_local_ip(&"100.64.1.25".parse::<IpAddr>().unwrap()));
+        assert!(is_private_or_local_ip(&"100.127.255.1".parse::<IpAddr>().unwrap()));
         // WAN / Public IPs must be rejected
         assert!(!is_private_or_local_ip(&"8.8.8.8".parse::<IpAddr>().unwrap()));
         assert!(!is_private_or_local_ip(&"1.1.1.1".parse::<IpAddr>().unwrap()));
