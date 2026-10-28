@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Otium Link",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "identifier": "com.otium.link",
   "build": {
     "frontendDist": "../dist",
@@ -15,8 +15,10 @@
         "label": "main",
         "title": "Otium Link",
         "url": "index.html",
-        "width": 540,
-        "height": 780,
+        "width": 860,
+        "height": 720,
+        "minWidth": 420,
+        "minHeight": 580,
         "resizable": true,
         "fullscreen": false
       }

@@ -26,6 +26,6 @@ describe('Otium Link Updater & Version Comparator', () => {
   });
 
   it('exports valid current version matching package version', () => {
-    expect(APP_CURRENT_VERSION).toBe('1.6.0');
+    expect(APP_CURRENT_VERSION).toBe('1.6.2');
   });
 });

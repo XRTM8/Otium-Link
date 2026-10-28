@@ -4,7 +4,7 @@
  * Only executes when explicitly requested by the user.
  */
 
-export const APP_CURRENT_VERSION = '1.6.0';
+export const APP_CURRENT_VERSION = '1.6.2';
 
 export interface ReleaseAsset {
   name: string;

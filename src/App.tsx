@@ -6,7 +6,6 @@ import {
   FileText,
   ShieldCheck,
   RefreshCw,
-  Sparkles,
   ArrowRightLeft,
   Settings as SettingsIcon,
   Wifi,
@@ -19,11 +18,9 @@ import {
   ClipboardList,
   Search,
   Code,
-  Hash,
   Link,
   File,
   Send,
-  Zap,
   ShieldAlert,
 } from 'lucide-react';
 import { OtiumLinkLogo } from './components/OtiumLinkLogo';
@@ -34,7 +31,8 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { Device, TransferItem } from './core/types';
 import { cleanUrl, formatBytes } from './core/urlCleaner';
 import { detectSensitiveContent } from './core/sensitiveDetector';
-import { loadSettings, saveSettings, AppSettings } from './core/settings';
+import { loadSettings, AppSettings } from './core/settings';
+import { useResponsive } from './core/useResponsive';
 import {
   playReceiveChime,
   playSendChime,
@@ -78,6 +76,7 @@ function formatTimestamp(ts: number): string {
 }
 
 export const App: React.FC = () => {
+  const { isMobile, isDesktop } = useResponsive();
   const [activeTab, setActiveTab] = useState<ActiveTab>('live');
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
@@ -449,8 +448,10 @@ export const App: React.FC = () => {
     showToast,
   ]);
 
-  // Global Keyboard Shortcuts
+  // Global Keyboard Shortcuts (Only active on non-mobile devices)
   useEffect(() => {
+    if (isMobile) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl + Enter: transmit clipboard
       if (e.ctrlKey && e.key === 'Enter') {
@@ -476,7 +477,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [clipboardText, handleTransmitClipboardText, showToast]);
+  }, [clipboardText, handleTransmitClipboardText, showToast, isMobile]);
 
   const handleCopyClipboard = (textOverride?: string, historyId?: string) => {
     const raw = textOverride || clipboardText;
@@ -536,6 +537,73 @@ export const App: React.FC = () => {
     return matchesFilter && matchesSearch;
   });
 
+  // Handle file dispatch
+  const handleSendFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    const targetPeer = devices.find(
+      (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
+    );
+    if (!targetPeer) {
+      showToast(
+        'warning',
+        'لا يوجد جهاز مقترن حالياً',
+        'شغّل Otium Link على هاتفك أو حاسوبك الآخر على نفس شبكة Wi-Fi أولاً'
+      );
+      return;
+    }
+    const targetIp = targetPeer.ip;
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const f of files) {
+      const filePath = (f as any).path || f.name;
+      const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const ok = await transmitFile(targetIp, filePath);
+      if (ok) {
+        successCount++;
+        playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
+        setTransfers((prev) => [
+          {
+            id: txId,
+            name: f.name,
+            size: f.size,
+            type: 'file',
+            progress: 1,
+            status: 'completed',
+            sender: 'هذا الجهاز',
+            receiver: targetPeer.name,
+            timestamp: Date.now(),
+            verified: true,
+          },
+          ...prev,
+        ]);
+      } else {
+        failCount++;
+        setTransfers((prev) => [
+          {
+            id: txId,
+            name: f.name,
+            size: f.size,
+            type: 'file',
+            progress: 0,
+            status: 'failed',
+            sender: 'هذا الجهاز',
+            receiver: targetPeer.name,
+            timestamp: Date.now(),
+            error: 'تعذر الاتصال بالجهاز لنقل الملف',
+          },
+          ...prev,
+        ]);
+      }
+    }
+
+    if (successCount > 0 && failCount === 0) {
+      showToast('success', `تم إرسال ${successCount} ملفات بنجاح ✓`, `إلى ${targetPeer.name}`);
+    } else if (failCount > 0) {
+      showToast('warning', `تعذر إرسال ${failCount} ملفات`, `يرجى التحقق من اتصال ${targetPeer.name}`);
+    }
+  };
+
   return (
     <div
       onDragOver={(e) => {
@@ -558,72 +626,8 @@ export const App: React.FC = () => {
             e.preventDefault();
             setIsDragging(false);
             playDropChime(appSettings.audioFeedback, appSettings.soundVolume);
-
             const droppedFiles = Array.from(e.dataTransfer.files);
-            if (droppedFiles.length > 0) {
-              const targetPeer = devices.find(
-                (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
-              );
-              if (!targetPeer) {
-                showToast(
-                  'warning',
-                  'لا يوجد جهاز مقترن حالياً',
-                  'شغّل التطبيق على الجهاز الآخر أولاً لنقل الملفات'
-                );
-                return;
-              }
-
-              let successCount = 0;
-              let failCount = 0;
-
-              for (const f of droppedFiles) {
-                const filePath = (f as any).path || f.name;
-                const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-                const ok = await transmitFile(targetPeer.ip, filePath);
-                if (ok) {
-                  successCount++;
-                  playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
-                  setTransfers((prev) => [
-                    {
-                      id: txId,
-                      name: f.name,
-                      size: f.size,
-                      type: 'file',
-                      progress: 1,
-                      status: 'completed',
-                      sender: 'هذا الجهاز',
-                      receiver: targetPeer.name,
-                      timestamp: Date.now(),
-                      verified: true,
-                    },
-                    ...prev,
-                  ]);
-                } else {
-                  failCount++;
-                  setTransfers((prev) => [
-                    {
-                      id: txId,
-                      name: f.name,
-                      size: f.size,
-                      type: 'file',
-                      progress: 0,
-                      status: 'failed',
-                      sender: 'هذا الجهاز',
-                      receiver: targetPeer.name,
-                      timestamp: Date.now(),
-                      error: 'تعذر الاتصال بالجهاز لنقل الملف',
-                    },
-                    ...prev,
-                  ]);
-                }
-              }
-
-              if (successCount > 0 && failCount === 0) {
-                showToast('success', `تم إرسال ${successCount} ملفات بنجاح ✓`, `إلى ${targetPeer.name}`);
-              } else if (failCount > 0) {
-                showToast('warning', `تعذر إرسال ${failCount} ملفات`, `يرجى التحقق من اتصال ${targetPeer.name}`);
-              }
-            }
+            handleSendFiles(droppedFiles);
           }}
           className="fixed inset-0 z-50 bg-[#07090e]/92 backdrop-blur-md flex flex-col items-center justify-center border-4 border-dashed border-emerald-400 p-6 animate-in fade-in duration-150"
         >
@@ -642,27 +646,46 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Top Header Bar */}
-      <header className="otium-chrome px-4 py-3 flex items-center justify-between border-b border-white/[0.08] z-20 shrink-0">
-        <div className="flex items-center gap-3">
-          <OtiumLinkLogo size={36} />
-          <div>
+      {/* ========================================================= */}
+      {/* ADAPTIVE HEADER BAR */}
+      {/* ========================================================= */}
+      <header className="otium-chrome px-4 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between border-b border-white/[0.08] z-20 shrink-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <OtiumLinkLogo size={isMobile ? 30 : 36} />
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-bold tracking-tight text-white">Otium Link | أوتيوم لينك</h1>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
-                v1.6.0 الأوفرهول الشامل
-              </span>
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white truncate">
+                {isMobile ? 'Otium Link' : 'Otium Link | أوتيوم لينك'}
+              </h1>
+              {!isMobile && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30 shrink-0">
+                  v1.6.2 الأوفر هول الشامل
+                </span>
+              )}
+              {isMobile && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
             </div>
-            <p className="text-[11px] text-gray-400">الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك</p>
+            {!isMobile && (
+              <p className="text-[11px] text-gray-400 truncate">
+                الجسر اللحظي للحافظة والملفات بين حاسوبك وهاتفك عبر الشبكة المحلية
+              </p>
+            )}
           </div>
         </div>
 
         {/* Status Pill & Actions */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs">
-            <Wifi className={`w-3.5 h-3.5 ${activePeers.length > 0 ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
-            <span className="text-gray-300 font-medium">
-              {activePeers.length > 0 ? `${activePeers.length} أجهزة متصلة` : 'الواي فاي جاهز'}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs">
+            <Wifi
+              className={`w-3.5 h-3.5 ${
+                activePeers.length > 0 ? 'text-emerald-400 animate-pulse' : 'text-slate-400'
+              }`}
+            />
+            <span className="text-gray-300 font-medium text-[11px] sm:text-xs">
+              {activePeers.length > 0
+                ? isMobile
+                  ? `${activePeers.length} متصل`
+                  : `${activePeers.length} أجهزة متصلة`
+                : 'الواي فاي جاهز'}
             </span>
           </div>
 
@@ -690,7 +713,7 @@ export const App: React.FC = () => {
 
           <button
             onClick={() => setIsSettingsOpen(true)}
-            title="الإعدادات والتخصيص"
+            title="الإعدادات والتفضيلات"
             className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.08] transition-colors otium-press"
           >
             <SettingsIcon className="w-4 h-4" />
@@ -698,30 +721,32 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Navigation Tab Bar */}
-      <nav className="flex items-center px-4 pt-2.5 pb-1 border-b border-white/[0.06] bg-black/20 gap-2 shrink-0">
+      {/* ========================================================= */}
+      {/* NAVIGATION TAB BAR */}
+      {/* ========================================================= */}
+      <nav className="flex items-center px-3 sm:px-4 pt-2 pb-1 border-b border-white/[0.06] bg-black/25 gap-1.5 sm:gap-2 shrink-0">
         <button
           onClick={() => setActiveTab('live')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
             activeTab === 'live'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
           <Radio className="w-3.5 h-3.5" />
-          <span>الرادار والنقل المباشر</span>
+          <span>{isMobile ? 'الرادار والنقل' : 'الرادار والنقل المباشر'}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('clipboard')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
             activeTab === 'clipboard'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
           <ClipboardList className="w-3.5 h-3.5" />
-          <span>خزينة الحافظة</span>
+          <span>{isMobile ? 'الحافظة' : 'خزينة الحافظة'}</span>
           {clipboardHistory.length > 0 && (
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
               {clipboardHistory.length}
@@ -731,14 +756,14 @@ export const App: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('transfers')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
             activeTab === 'transfers'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
               : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
           <ArrowRightLeft className="w-3.5 h-3.5" />
-          <span>سجل التحويلات</span>
+          <span>{isMobile ? 'التحويلات' : 'سجل التحويلات'}</span>
           {transfers.length > 1 && (
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 text-gray-300 font-mono">
               {transfers.length}
@@ -747,236 +772,172 @@ export const App: React.FC = () => {
         </button>
       </nav>
 
-      {/* Main Workspace */}
-      <main className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* ========================================================= */}
+      {/* MAIN CONTENT WORKSPACE */}
+      {/* ========================================================= */}
+      <main className="flex-1 overflow-y-auto p-3 sm:p-4 overscroll-contain">
         {/* ========================================================= */}
-        {/* TAB 1: LIVE RADAR & HUB */}
+        {/* TAB 1: LIVE RADAR & HUB (ADAPTIVE DESKTOP & MOBILE) */}
         {/* ========================================================= */}
         {activeTab === 'live' && (
-          <div key="tab-live" className="animate-otium-enter space-y-4">
-            {/* Visual Radar Scanner */}
-            <RadarVisualizer
-              devices={devices}
-              selectedPeerId={selectedPeerId}
-              onSelectPeer={(id) => {
-                setSelectedPeerId(id);
-                playDropChime(appSettings.audioFeedback, appSettings.soundVolume);
-              }}
-              onOpenDirectConnect={() => setIsDirectConnectOpen(true)}
-            />
-
-            {/* Live Universal Clipboard Section */}
-            <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold text-gray-200">
-                  <Copy className="w-4 h-4 text-emerald-400" />
-                  <span>الحافظة الحية التلقائية (Live Background Sync)</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Clean link toggle */}
-                  <button
-                    onClick={() => {
-                      const updated = {
-                        ...appSettings,
-                        cleanTrackingLinks: !appSettings.cleanTrackingLinks,
-                      };
-                      setAppSettings(updated);
-                      saveSettings(updated);
-                      showToast(
-                        'info',
-                        updated.cleanTrackingLinks ? 'تم تفعيل درع الخصوصية' : 'تم تعطيل درع الخصوصية'
-                      );
-                    }}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold flex items-center gap-1 transition-colors otium-press ${
-                      appSettings.cleanTrackingLinks
-                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                        : 'bg-white/[0.04] text-gray-400 border-white/[0.08]'
-                    }`}
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>درع الخصوصية</span>
-                  </button>
-
-                  {/* Auto sync switch */}
-                  <button
-                    onClick={() => {
-                      const updated = {
-                        ...appSettings,
-                        autoClipboardSync: !appSettings.autoClipboardSync,
-                      };
-                      setAppSettings(updated);
-                      saveSettings(updated);
-                      showToast(
-                        'info',
-                        updated.autoClipboardSync ? 'تم تفعيل المزامنة التلقائية' : 'تم إيقاف المزامنة التلقائية'
-                      );
-                    }}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-bold flex items-center gap-1 transition-colors otium-press ${
-                      appSettings.autoClipboardSync
-                        ? 'bg-emerald-500 text-black border-emerald-400'
-                        : 'bg-white/[0.06] text-gray-400 border-white/[0.08]'
-                    }`}
-                  >
-                    <Zap className="w-3 h-3" />
-                    <span>{appSettings.autoClipboardSync ? 'المزامنة نشطة' : 'المزامنة متوقفة'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Current Clipboard Box */}
-              <div className="bg-black/40 border border-white/[0.08] rounded-xl p-3 space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-gray-400">
-                  <div className="flex items-center gap-2">
-                    <span>المحتوى في الحافظة حالياً:</span>
-                    {detectSensitiveContent(clipboardText).isSensitive && (
-                      <span className="text-amber-400 font-bold text-[10px] flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-md">
-                        <ShieldAlert className="w-3 h-3" />
-                        <span>محتوى حساس: {detectSensitiveContent(clipboardText).labelArabic}</span>
-                      </span>
-                    )}
-                  </div>
-                  {appSettings.cleanTrackingLinks && cleanUrl(clipboardText).wasCleaned && (
-                    <span className="text-emerald-400 font-semibold text-[10px] flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span>تم تطهير بارامترات التتبع (UTM/si) بنجاح</span>
-                    </span>
-                  )}
-                </div>
-
-                <textarea
-                  value={clipboardText}
-                  onChange={(e) => setClipboardText(e.target.value)}
-                  rows={2}
-                  className="w-full bg-transparent text-xs text-gray-200 outline-none resize-none font-mono"
-                  placeholder="انسخ أي نص أو رابط في أي مكان على جهازك وسيتم بثه ومزامنته فوراً..."
+          <div key="tab-live" className="animate-otium-enter">
+            {/* Desktop Command Center Grid Layout (2 Columns on wide screens) */}
+            <div className={`${isDesktop ? 'grid grid-cols-12 gap-4' : 'space-y-3.5'}`}>
+              {/* Column 1: Radar & Peer Discovery (Desktop 5 cols / Mobile full) */}
+              <div className={`${isDesktop ? 'col-span-5 space-y-4' : 'space-y-3.5'}`}>
+                {/* Visual Radar Scanner */}
+                <RadarVisualizer
+                  devices={devices}
+                  selectedPeerId={selectedPeerId}
+                  onSelectPeer={(id) => {
+                    setSelectedPeerId(id);
+                    playDropChime(appSettings.audioFeedback, appSettings.soundVolume);
+                  }}
+                  onOpenDirectConnect={() => setIsDirectConnectOpen(true)}
                 />
 
-                <div className="flex items-center justify-between pt-1 border-t border-white/[0.05]">
-                  <span className="text-[10px] text-gray-500 font-mono">
-                    {clipboardText.length} حرفاً • {formatBytes(new Blob([clipboardText]).size)}
-                  </span>
+                {/* Quick Info Badge on Desktop */}
+                {isDesktop && (
+                  <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-xs text-slate-400 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-slate-300">الجهاز النشط:</span>
+                      <span className="text-emerald-400 font-mono font-bold">
+                        {devices.find((d) => d.id === selectedPeerId)?.name || 'الكل'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-slate-300">بروتوكول البث:</span>
+                      <span className="text-gray-400 font-mono">P2P Mesh (UDP 42424 / TCP 42425)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleCopyClipboard()}
-                      className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold flex items-center gap-1.5 transition-colors otium-press"
-                    >
-                      {copiedSuccess ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                      <span>{copiedSuccess ? 'تم النسخ!' : 'نسخ للحافظة'}</span>
-                    </button>
+              {/* Column 2: Live Universal Clipboard & File Dispatch (Desktop 7 cols / Mobile full) */}
+              <div className={`${isDesktop ? 'col-span-7 space-y-4' : 'space-y-3.5'}`}>
+                {/* Live Universal Clipboard Section */}
+                <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-gray-200">
+                      <Copy className="w-4 h-4 text-emerald-400" />
+                      <span>الحافظة الحية التلقائية (Live Clipboard Bridge)</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Clean link privacy indicator */}
+                      <div
+                        title="درع الخصوصية لتطهير الروابط"
+                        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-semibold"
+                      >
+                        <ShieldCheck className="w-3 h-3" />
+                        <span>درع الخصوصية</span>
+                      </div>
+
+                      <div
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                          appSettings.autoClipboardSync
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-white/5 text-gray-400 border-white/10'
+                        }`}
+                      >
+                        {appSettings.autoClipboardSync ? 'المزامنة نشطة' : 'المزامنة يدوية'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Clean Link Stripped Notification */}
+                  {cleanUrl(clipboardText).wasCleaned && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                      <span>تم تطهير بارامترات التتبع بنجاح (UTM / Tracking params)</span>
+                    </div>
+                  )}
+
+                  {/* Textarea / Live Content Display */}
+                  <div className="relative">
+                    <textarea
+                      value={clipboardText}
+                      onChange={(e) => setClipboardText(e.target.value)}
+                      placeholder="الصق أو اكتب أي نص هنا للإرسال اللحظي..."
+                      rows={isMobile ? 3 : 4}
+                      className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 font-sans resize-none transition-all"
+                    />
+                    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 text-[10px] text-gray-500 font-mono">
+                      <span>{clipboardText.length} حرفاً</span>
+                      <span>•</span>
+                      <span>{new Blob([clipboardText]).size} B</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2.5 pt-0.5">
                     <button
                       onClick={() => handleTransmitClipboardText(clipboardText, false)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 transition-colors otium-press shadow-sm"
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all otium-press"
                     >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>إرسال للجهاز المقترن فوراً</span>
+                      <Send className="w-4 h-4" />
+                      <span>{isMobile ? 'إرسال للجهاز المقترن فوراً' : 'إرسال للجهاز المقترن فوراً (Ctrl+Enter)'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleCopyClipboard()}
+                      className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs sm:text-sm font-semibold flex items-center gap-2 border border-white/[0.08] transition-colors otium-press shrink-0"
+                    >
+                      {copiedSuccess ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-400" />
+                          <span className="text-emerald-400">تم النسخ</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          <span>نسخ الحافظة</span>
+                        </>
+                      )}
                     </button>
                   </div>
-                </div>
-              </div>
-            </section>
+                </section>
 
-            {/* High Speed File Drop Area */}
-            <section
-              onClick={() => fileInputRef.current?.click()}
-              className="otium-card rounded-2xl p-6 border-2 border-dashed border-white/[0.12] hover:border-emerald-500/40 hover:bg-white/[0.02] transition-all text-center flex flex-col items-center justify-center gap-3 cursor-pointer"
-            >
-              <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <UploadCloud className="w-7 h-7" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white mb-1">
-                  اسحب وأفلت أي ملف أو صورة للإرسال الفوري
-                </h3>
-                <p className="text-[11px] text-gray-400">
-                  بدون أي ضغط للجودة، مع فحص سلامة البيانات بنظام CRC32 ونقل متدفق مباشر
-                </p>
-              </div>
-              <button
-                type="button"
-                className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 text-xs font-semibold border border-white/[0.08] transition-colors otium-press"
-              >
-                <span>أو اختر ملفاً من جهازك (Ctrl+O)</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={async (e) => {
-                  const files = e.target.files ? Array.from(e.target.files) : [];
-                  if (files.length > 0) {
-                    const targetPeer = devices.find(
-                      (d) => !d.isSelf && (!selectedPeerId || d.id === selectedPeerId)
-                    );
-                    if (!targetPeer) {
-                      showToast(
-                        'warning',
-                        'لا يوجد جهاز مقترن حالياً',
-                        'شغّل Otium Link على الهاتف أو الحاسوب الآخر على نفس شبكة Wi-Fi أولاً'
-                      );
-                      return;
-                    }
-                    const targetIp = targetPeer.ip;
-                    let successCount = 0;
-                    let failCount = 0;
+                {/* Touch & Drag-and-Drop File Dispatch Section */}
+                <section
+                  onClick={() => fileInputRef.current?.click()}
+                  className="otium-card rounded-2xl p-5 sm:p-6 border-2 border-dashed border-white/15 hover:border-emerald-500/50 transition-all cursor-pointer flex flex-col items-center justify-center text-center space-y-2 group otium-press"
+                >
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-8 h-8" />
+                  </div>
 
-                    for (const f of files) {
-                      const filePath = (f as any).path || f.name;
-                      const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-                      const ok = await transmitFile(targetIp, filePath);
-                      if (ok) {
-                        successCount++;
-                        playSendChime(appSettings.audioFeedback, appSettings.soundVolume);
-                        setTransfers((prev) => [
-                          {
-                            id: txId,
-                            name: f.name,
-                            size: f.size,
-                            type: 'file',
-                            progress: 1,
-                            status: 'completed',
-                            sender: 'هذا الجهاز',
-                            receiver: targetPeer.name,
-                            timestamp: Date.now(),
-                            verified: true,
-                          },
-                          ...prev,
-                        ]);
-                      } else {
-                        failCount++;
-                        setTransfers((prev) => [
-                          {
-                            id: txId,
-                            name: f.name,
-                            size: f.size,
-                            type: 'file',
-                            progress: 0,
-                            status: 'failed',
-                            sender: 'هذا الجهاز',
-                            receiver: targetPeer.name,
-                            timestamp: Date.now(),
-                            error: 'تعذر الاتصال بالجهاز لنقل الملف',
-                          },
-                          ...prev,
-                        ]);
-                      }
-                    }
+                  <div>
+                    <h4 className="text-sm sm:text-base font-bold text-white">
+                      {isMobile ? 'اختيار ملفات أو صور للإرسال' : 'اسحب وأفلت أي ملف أو صورة للإرسال الفوري'}
+                    </h4>
+                    <p className="text-xs text-gray-400 mt-1 max-w-sm">
+                      {isMobile
+                        ? 'انقر لتحديد ملفات من هاتفك ونقلها بأعلى سرعة دون أي ضغط أو خوادم وسيطة'
+                        : 'بدون أي ضغط للجودة، مع فحص سلامة البيانات بنظام CRC32 ونقل متدفق مباشر'}
+                    </p>
+                  </div>
 
-                    if (successCount > 0 && failCount === 0) {
-                      showToast('success', `تم إرسال ${successCount} ملفات بنجاح ✓`, `إلى ${targetPeer.name}`);
-                    } else if (failCount > 0) {
-                      showToast('warning', `تعذر إرسال ${failCount} ملفات`, `يرجى التحقق من اتصال ${targetPeer.name}`);
-                    }
-                  }
-                }}
-              />
-            </section>
+                  <button
+                    type="button"
+                    className="mt-1 px-4 py-2 rounded-xl bg-white/[0.06] group-hover:bg-emerald-500/20 text-gray-200 group-hover:text-emerald-300 text-xs font-semibold border border-white/[0.08] group-hover:border-emerald-500/30 transition-all otium-press"
+                  >
+                    <span>{isMobile ? 'تصفح الملفات في الهاتف' : 'أو اختر ملفاً من جهازك (Ctrl+O)'}</span>
+                  </button>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = e.target.files ? Array.from(e.target.files) : [];
+                      handleSendFiles(files);
+                    }}
+                  />
+                </section>
+              </div>
+            </div>
           </div>
         )}
 
@@ -985,13 +946,13 @@ export const App: React.FC = () => {
         {/* ========================================================= */}
         {activeTab === 'clipboard' && (
           <div key="tab-clipboard" className="animate-otium-enter">
-            <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-4">
+            <section className="otium-card rounded-2xl p-4 sm:p-5 border border-white/[0.08] space-y-4">
               {/* Header & Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <ClipboardList className="w-4 h-4 text-emerald-400" />
                   <span className="text-sm font-bold text-white">خزينة سجل الحافظة المشفر محلياً</span>
-                  <span className="text-xs text-gray-400">({clipboardHistory.length} عنصر)</span>
+                  <span className="text-xs text-gray-400 font-mono">({clipboardHistory.length} عنصر)</span>
                 </div>
 
                 {/* Search bar */}
@@ -1001,159 +962,126 @@ export const App: React.FC = () => {
                     type="text"
                     value={clipboardSearch}
                     onChange={(e) => setClipboardSearch(e.target.value)}
-                    placeholder="بحث في النصوص المنسوخة..."
-                    className="w-full pr-8 pl-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+                    placeholder="بحث في سجل الحافظة..."
+                    className="w-full pr-8 pl-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
                   />
                 </div>
               </div>
 
-              {/* Filter Tabs */}
+              {/* Filter Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
                 <button
                   onClick={() => setClipboardFilter('all')}
-                  className={`px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
+                  className={`px-3 py-1 rounded-lg font-semibold transition-colors otium-press shrink-0 ${
                     clipboardFilter === 'all'
-                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                       : 'bg-white/5 text-gray-400 hover:text-white'
                   }`}
                 >
-                  الكل
+                  الكل ({clipboardHistory.length})
                 </button>
                 <button
                   onClick={() => setClipboardFilter('url')}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-semibold transition-colors otium-press shrink-0 ${
                     clipboardFilter === 'url'
-                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                       : 'bg-white/5 text-gray-400 hover:text-white'
                   }`}
                 >
                   <Link className="w-3 h-3" />
-                  <span>الروابط</span>
-                </button>
-                <button
-                  onClick={() => setClipboardFilter('code')}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
-                    clipboardFilter === 'code'
-                      ? 'bg-emerald-500 text-slate-950 font-bold'
-                      : 'bg-white/5 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <Code className="w-3 h-3" />
-                  <span>الأكواد</span>
-                </button>
-                <button
-                  onClick={() => setClipboardFilter('number')}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
-                    clipboardFilter === 'number'
-                      ? 'bg-emerald-500 text-slate-950 font-bold'
-                      : 'bg-white/5 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <Hash className="w-3 h-3" />
-                  <span>الأرقام</span>
+                  <span>روابط</span>
                 </button>
                 <button
                   onClick={() => setClipboardFilter('text')}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition-colors otium-press ${
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-semibold transition-colors otium-press shrink-0 ${
                     clipboardFilter === 'text'
-                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                       : 'bg-white/5 text-gray-400 hover:text-white'
                   }`}
                 >
                   <FileText className="w-3 h-3" />
-                  <span>النصوص</span>
+                  <span>نصوص</span>
+                </button>
+                <button
+                  onClick={() => setClipboardFilter('code')}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg font-semibold transition-colors otium-press shrink-0 ${
+                    clipboardFilter === 'code'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-white/5 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Code className="w-3 h-3" />
+                  <span>أكواد برمجية</span>
                 </button>
               </div>
 
-              {/* List */}
+              {/* Items List */}
               <div className="space-y-2">
                 {filteredHistory.map((item) => (
                   <div
                     key={item.id}
-                    className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition-all space-y-2"
+                    className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3 text-xs hover:bg-white/[0.04] transition-all"
                   >
-                    <div className="flex items-center justify-between text-[11px] text-gray-400">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${
-                            item.type === 'url'
-                              ? 'bg-emerald-500/15 text-emerald-400'
-                              : item.type === 'code'
-                              ? 'bg-cyan-500/15 text-cyan-400'
-                              : item.type === 'number'
-                              ? 'bg-amber-500/15 text-amber-400'
-                              : 'bg-slate-500/15 text-slate-300'
-                          }`}
-                        >
-                          {item.type === 'url'
-                            ? 'رابط'
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div
+                        className={`p-2 rounded-lg shrink-0 ${
+                          item.type === 'url'
+                            ? 'bg-emerald-500/10 text-emerald-400'
                             : item.type === 'code'
-                            ? 'كود برمجي'
-                            : item.type === 'number'
-                            ? 'رقم هاتف'
-                            : 'نص'}
-                        </span>
-                        {item.isCleanedUrl && (
-                          <span className="text-emerald-400 text-[10px] flex items-center gap-1">
-                            <Sparkles className="w-2.5 h-2.5" />
-                            <span>مطهر من التتبع</span>
-                          </span>
+                            ? 'bg-purple-500/10 text-purple-400'
+                            : 'bg-cyan-500/10 text-cyan-400'
+                        }`}
+                      >
+                        {item.type === 'url' ? (
+                          <Link className="w-3.5 h-3.5" />
+                        ) : item.type === 'code' ? (
+                          <Code className="w-3.5 h-3.5" />
+                        ) : (
+                          <FileText className="w-3.5 h-3.5" />
                         )}
                       </div>
-                      <span className="font-mono text-[10px]">{formatTimestamp(item.timestamp)}</span>
+                      <div className="text-right min-w-0 flex-1">
+                        <span className="font-sans text-gray-200 block truncate">{item.text}</span>
+                        <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
+                          <span>{formatTimestamp(item.timestamp)}</span>
+                          {item.isCleanedUrl && (
+                            <span className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded font-semibold">
+                              تطهير UTM
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <p
-                      className={`text-xs text-gray-200 line-clamp-3 select-text ${
-                        item.type === 'code' ? 'font-mono bg-black/30 p-2 rounded-lg' : ''
-                      }`}
-                    >
-                      {item.text}
-                    </p>
-
-                    <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
-                      <span className="text-[10px] text-gray-500 font-mono">
-                        {item.text.length} حرفاً
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleCopyClipboard(item.text, item.id)}
-                          title="نسخ إلى الحافظة"
-                          className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-gray-300 flex items-center gap-1 transition-colors otium-press"
-                        >
-                          {copiedHistoryId === item.id ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              <span className="text-emerald-400">تم النسخ</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span>نسخ</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => handleTransmitClipboardText(item.text, false)}
-                          title="إرسال للجهاز المقترن"
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-colors otium-press"
-                        >
-                          <Send className="w-3 h-3" />
-                          <span>إرسال</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            removeClipboardHistoryItem(item.id);
-                            playDeleteChime(appSettings.audioFeedback, appSettings.soundVolume);
-                          }}
-                          title="حذف هذا العنصر"
-                          className="p-1 rounded-lg text-gray-500 hover:text-red-400 hover:bg-white/5 transition-colors otium-press"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleTransmitClipboardText(item.text, false)}
+                        title="إرسال للجهاز المقترن"
+                        className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors otium-press"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleCopyClipboard(item.text, item.id)}
+                        title="نسخ النص"
+                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-colors otium-press"
+                      >
+                        {copiedHistoryId === item.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          removeClipboardHistoryItem(item.id);
+                          setClipboardHistory(loadClipboardHistory());
+                        }}
+                        title="حذف هذا العنصر"
+                        className="p-1.5 rounded-lg text-gray-500 hover:text-rose-400 hover:bg-white/5 transition-colors otium-press"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1173,7 +1101,7 @@ export const App: React.FC = () => {
         {/* ========================================================= */}
         {activeTab === 'transfers' && (
           <div key="tab-transfers" className="animate-otium-enter">
-            <section className="otium-card rounded-2xl p-4 border border-white/[0.08] space-y-3">
+            <section className="otium-card rounded-2xl p-4 sm:p-5 border border-white/[0.08] space-y-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-emerald-400" />
@@ -1192,10 +1120,10 @@ export const App: React.FC = () => {
                   <button
                     onClick={handleClearHistory}
                     title="مسح السجل"
-                    className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-white/[0.05] transition-colors text-[10px] flex items-center gap-1 otium-press"
+                    className="p-1 rounded-md text-gray-500 hover:text-rose-400 hover:bg-white/[0.05] transition-colors text-[10px] flex items-center gap-1 otium-press"
                   >
                     <Trash2 className="w-3 h-3" />
-                    <span>مسح السجل</span>
+                    <span>مسح</span>
                   </button>
                 </div>
               </div>
@@ -1252,7 +1180,7 @@ export const App: React.FC = () => {
                           </button>
                           <button
                             onClick={() => openDownloadsFolder()}
-                            title="كشف في مجلد التنزيلات"
+                            title="عرض في مجلد التنزيلات"
                             className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-emerald-400 hover:text-emerald-300 transition-colors otium-press"
                           >
                             <FolderOpen className="w-3.5 h-3.5" />
@@ -1295,13 +1223,19 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer Info */}
-      <footer className="otium-chrome px-4 py-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-gray-400 shrink-0">
-        <div className="flex items-center gap-1.5 text-emerald-400/90 font-medium">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>منظومة Otium — تشفير محلي تام بدون أي خوادم سحابية | رخصة GNU GPL v3</span>
+      {/* ========================================================= */}
+      {/* ADAPTIVE FOOTER INFO */}
+      {/* ========================================================= */}
+      <footer className="otium-chrome px-4 py-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-gray-400 shrink-0 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
+        <div className="flex items-center gap-1.5 text-emerald-400/90 font-medium truncate">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span className="truncate">
+            {isMobile
+              ? 'تشفير محلي تام • رخصة GNU GPL v3'
+              : 'منظومة Otium — تشفير محلي تام بدون أي خوادم سحابية | رخصة GNU GPL v3'}
+          </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => {
               openDownloadsFolder();
@@ -1310,12 +1244,14 @@ export const App: React.FC = () => {
             className="flex items-center gap-1 hover:text-emerald-400 transition-colors otium-press"
           >
             <FolderOpen className="w-3.5 h-3.5" />
-            <span>مجلد التنزيلات (Ctrl+D)</span>
+            <span>{isMobile ? 'التنزيلات' : 'مجلد التنزيلات (Ctrl+D)'}</span>
           </button>
         </div>
       </footer>
 
-      {/* Settings Modal */}
+      {/* ========================================================= */}
+      {/* MODALS */}
+      {/* ========================================================= */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -1328,12 +1264,11 @@ export const App: React.FC = () => {
         onClearHistory={handleClearHistory}
       />
 
-      {/* Direct IP Connect Modal */}
       <DirectConnectModal
         isOpen={isDirectConnectOpen}
         onClose={() => setIsDirectConnectOpen(false)}
         onAddDirectPeer={handleDirectPeerAdded}
-        selfDevice={devices.find((d) => d.isSelf)}
+        selfDevice={selfDevice}
       />
     </div>
   );
