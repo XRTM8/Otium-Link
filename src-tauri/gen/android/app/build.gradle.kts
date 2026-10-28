@@ -42,7 +42,7 @@ if (releaseBuildRequested && !releaseSigningReady) {
 }
 
 android {
-    compileSdk = 35
+    compileSdk = 36
     namespace = "com.otium.link"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
