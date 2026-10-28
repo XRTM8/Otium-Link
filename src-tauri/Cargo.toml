@@ -1,6 +1,6 @@
 [package]
 name = "otium-link"
-version = "1.6.0"
+version = "1.6.1"
 description = "A silent, local-first universal bridge for clipboard and file sync between PC and Phone"
 authors = ["XRTM8"]
 edition = "2021"
