@@ -13,8 +13,12 @@ use tauri::WindowEvent;
 mod network;
 pub use network::{get_unique_filepath, NetworkManager, PeerDevice};
 
+mod cast;
+pub use cast::{CastInfo, CastManager, SlidePayload, LaserPayload};
+
 struct AppState {
     network: Arc<NetworkManager>,
+    cast: Arc<CastManager>,
 }
 
 #[tauri::command]
@@ -185,6 +189,52 @@ fn remove_direct_peer(state: tauri::State<'_, AppState>, id: String) -> Result<(
     Ok(())
 }
 
+#[tauri::command]
+fn start_cast(app: tauri::AppHandle, state: tauri::State<'_, AppState>, pin: Option<String>) -> Result<CastInfo, String> {
+    state.cast.start(pin, app)
+}
+
+#[tauri::command]
+fn stop_cast(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.cast.stop();
+    Ok(())
+}
+
+#[tauri::command]
+fn get_cast_info(state: tauri::State<'_, AppState>) -> CastInfo {
+    state.cast.get_info()
+}
+
+#[tauri::command]
+fn set_cast_slide_index(state: tauri::State<'_, AppState>, index: usize) -> Result<(), String> {
+    state.cast.set_slide_index(index);
+    Ok(())
+}
+
+#[tauri::command]
+fn set_cast_slides(state: tauri::State<'_, AppState>, slides: Vec<SlidePayload>) -> Result<(), String> {
+    state.cast.set_slides(slides);
+    Ok(())
+}
+
+#[tauri::command]
+fn update_cast_laser(state: tauri::State<'_, AppState>, x: f32, y: f32, active: bool) -> Result<(), String> {
+    state.cast.update_laser(x, y, active);
+    Ok(())
+}
+
+#[tauri::command]
+fn broadcast_cast_message(state: tauri::State<'_, AppState>, text: String, urgent: bool) -> Result<(), String> {
+    state.cast.broadcast_message(text, urgent);
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_cast_canvas(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.cast.clear_canvas();
+    Ok(())
+}
+
 fn resolve_device_name() -> String {
     env::var("COMPUTERNAME")
         .or_else(|_| env::var("HOSTNAME"))
@@ -215,7 +265,8 @@ pub fn run() {
                 network.start_desktop_clipboard_watcher(handle.clone());
             }
 
-            app.manage(AppState { network });
+            let cast = Arc::new(CastManager::new());
+            app.manage(AppState { network, cast });
 
             // Setup System Tray Icon for desktop background operation
             #[cfg(desktop)]
@@ -288,7 +339,15 @@ pub fn run() {
             open_downloads_folder,
             open_file,
             add_direct_peer,
-            remove_direct_peer
+            remove_direct_peer,
+            start_cast,
+            stop_cast,
+            get_cast_info,
+            set_cast_slide_index,
+            set_cast_slides,
+            update_cast_laser,
+            broadcast_cast_message,
+            clear_cast_canvas
         ])
         .run(tauri::generate_context!())
         .expect("error while running otium link");

@@ -364,3 +364,111 @@ export async function openExternalUrl(url: string): Promise<boolean> {
     return false;
   }
 }
+
+export interface CastInfo {
+  is_running: boolean;
+  port: number;
+  local_ip: string;
+  url: string;
+  pin: string;
+  connected_viewers: number;
+  current_slide: number;
+  total_slides: number;
+}
+
+export interface SlideData {
+  index: number;
+  total: number;
+  title: string;
+  text: string;
+  image_data?: string | null;
+}
+
+export async function startCastServer(pin?: string): Promise<CastInfo> {
+  if (!isTauriEnvironment()) {
+    return {
+      is_running: true,
+      port: 42426,
+      local_ip: '192.168.1.100',
+      url: 'http://192.168.1.100:42426',
+      pin: pin || '1234',
+      connected_viewers: 1,
+      current_slide: 0,
+      total_slides: 1,
+    };
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return await invoke<CastInfo>('start_cast', { pin: pin || null });
+}
+
+export async function stopCastServer(): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('stop_cast');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchCastInfo(): Promise<CastInfo> {
+  if (!isTauriEnvironment()) {
+    return {
+      is_running: false,
+      port: 42426,
+      local_ip: '127.0.0.1',
+      url: 'http://127.0.0.1:42426',
+      pin: '',
+      connected_viewers: 0,
+      current_slide: 0,
+      total_slides: 1,
+    };
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return await invoke<CastInfo>('get_cast_info');
+}
+
+export async function setCastSlideIndex(index: number): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_cast_slide_index', { index });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function setCastSlides(slides: SlideData[]): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_cast_slides', { slides });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateCastLaser(x: number, y: number, active: boolean): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('update_cast_laser', { x, y, active });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function broadcastCastMessage(text: string, urgent: boolean = true): Promise<boolean> {
+  if (!isTauriEnvironment()) return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('broadcast_cast_message', { text, urgent });
+    return true;
+  } catch {
+    return false;
+  }
+}

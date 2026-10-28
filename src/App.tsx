@@ -22,11 +22,13 @@ import {
   File,
   Send,
   ShieldAlert,
+  Tv,
 } from 'lucide-react';
 import { OtiumLinkLogo } from './components/OtiumLinkLogo';
 import { SettingsModal } from './components/SettingsModal';
 import { DirectConnectModal } from './components/DirectConnectModal';
 import { RadarVisualizer } from './components/RadarVisualizer';
+import { SmartCastView } from './components/SmartCastView';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Device, TransferItem } from './core/types';
 import { cleanUrl, formatBytes } from './core/urlCleaner';
@@ -60,7 +62,7 @@ import {
   openLocalFile,
 } from './core/tauriBridge';
 
-type ActiveTab = 'live' | 'clipboard' | 'transfers';
+type ActiveTab = 'live' | 'clipboard' | 'transfers' | 'cast';
 
 function formatTimestamp(ts: number): string {
   try {
@@ -811,6 +813,18 @@ export const App: React.FC = () => {
             </span>
           )}
         </button>
+
+        <button
+          onClick={() => setActiveTab('cast')}
+          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold otium-tab-transition otium-press flex-1 sm:flex-initial justify-center ${
+            activeTab === 'cast'
+              ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-sm shadow-purple-500/10'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          <Tv className="w-3.5 h-3.5" />
+          <span>{isMobile ? 'العرض' : 'العرض الذكي (Cast)'}</span>
+        </button>
       </nav>
 
       {/* ========================================================= */}
@@ -1260,6 +1274,15 @@ export const App: React.FC = () => {
                 ))}
               </div>
             </section>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 4: SMART CAST & PRESENTATION (CLASSROOM & SMART BOARD) */}
+        {/* ========================================================= */}
+        {activeTab === 'cast' && (
+          <div key="tab-cast" className="animate-otium-enter">
+            <SmartCastView showToast={showToast} isMobile={isMobile} />
           </div>
         )}
       </main>
